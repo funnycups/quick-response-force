@@ -1103,13 +1103,21 @@ export function initializeBindings() {
     
     // 添加新提示词
     panel.on('click.qrf', '#qrf_add_jailbreak_prompt', function() {
-        const container = panel.find('#qrf_jailbreak_prompts_container');
-        const newPrompt = { role: 'system', content: '' };
-        const index = container.find('.qrf_jailbreak_prompt_item').length;
-        const item = createJailbreakPromptItem(newPrompt, index);
-        container.append(item);
-        saveJailbreakPrompts(panel);
-        toastr.success('已添加新提示词');
+        console.log('[QRF] 添加提示词按钮被点击');
+        try {
+            const container = panel.find('#qrf_jailbreak_prompts_container');
+            console.log('[QRF] Container found:', container.length);
+            const newPrompt = { role: 'system', content: '' };
+            const index = container.find('.qrf_jailbreak_prompt_item').length;
+            console.log('[QRF] Creating item at index:', index);
+            const item = createJailbreakPromptItem(newPrompt, index);
+            container.append(item);
+            saveJailbreakPrompts(panel);
+            toastr.success('已添加新提示词');
+        } catch (error) {
+            console.error('[QRF] Error adding jailbreak prompt:', error);
+            toastr.error('添加提示词失败: ' + error.message);
+        }
     });
     
     // 添加核心提示词占位符
