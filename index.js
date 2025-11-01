@@ -313,19 +313,40 @@ async function runOptimizationLogic(userMessage) {
         }
 
         if (processedMessage) {
-            // [新功能] 标签排除逻辑（在保存和提取前先排除指定标签）
+            // [新功能] 标签排除逻辑（支持标签名或完整正则表达式）
             const tagsToExclude = (finalApiSettings.excludeTags || '').trim();
             if (tagsToExclude) {
-                const excludeTagNames = tagsToExclude.split(',').map(t => t.trim()).filter(t => t);
-                if (excludeTagNames.length > 0) {
+                const excludePatterns = tagsToExclude.split(',').map(t => t.trim()).filter(t => t);
+                if (excludePatterns.length > 0) {
                     let workingMessage = processedMessage;
-                    excludeTagNames.forEach(tagName => {
-                        const safeTagName = escapeRegExp(tagName);
-                        const regex = new RegExp(`<${safeTagName}[^>]*>[\\s\\S]*<\\/${safeTagName}>`, 'gi');
-                        workingMessage = workingMessage.replace(regex, '');
+                    const processedPatterns = [];
+                    
+                    excludePatterns.forEach(pattern => {
+                        try {
+                            let regex;
+                            // 检测是否为完整正则表达式格式：/pattern/flags
+                            const regexMatch = pattern.match(/^\/(.+?)\/([gimuy]*)$/);
+                            
+                            if (regexMatch) {
+                                // 用户提供了完整的正则表达式
+                                regex = new RegExp(regexMatch[1], regexMatch[2]);
+                                processedPatterns.push(pattern);
+                            } else {
+                                // 传统模式：将标签名转换为正则表达式
+                                const safeTagName = escapeRegExp(pattern);
+                                regex = new RegExp(`<${safeTagName}[^>]*>[\\s\\S]*<\\/${safeTagName}>`, 'gi');
+                                processedPatterns.push(`标签:${pattern}`);
+                            }
+                            
+                            workingMessage = workingMessage.replace(regex, '');
+                        } catch (error) {
+                            console.error(`[${extension_name}] 无效的正则表达式模式: ${pattern}`, error);
+                            toastr.warning(`无效的排除模式: ${pattern}`, '标签排除');
+                        }
                     });
+                    
                     processedMessage = workingMessage;
-                    console.log(`[${extension_name}] 已排除标签: ${excludeTagNames.join(', ')}`);
+                    console.log(`[${extension_name}] 已排除模式: ${processedPatterns.join(', ')}`);
                 }
             }
 

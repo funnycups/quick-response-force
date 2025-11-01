@@ -36,9 +36,12 @@
     <fieldset class="settings-group">
         <legend><i class="fas fa-tags"></i> 内容处理</legend>
         <div class="qrf_settings_block">
-            <label for="qrf_exclude_tags">标签排除（贪婪匹配）</label>
-            <input id="qrf_exclude_tags" type="text" class="text_pole" placeholder="例如: thinking,internal" />
-            <small class="notes">在提取标签前，先用贪婪匹配排除指定的标签及其内容。多个标签用英文逗号分隔。这些标签会被完全移除，不会出现在最终发送给酒馆的内容中。</small>
+            <label for="qrf_exclude_tags">标签排除（支持正则表达式）</label>
+            <input id="qrf_exclude_tags" type="text" class="text_pole" placeholder="例如: thinking,internal 或 /&lt;think&gt;.*?&lt;\/think&gt;/gis" />
+            <small class="notes">在提取标签前，排除指定的标签及其内容。支持两种格式：
+                <br>1. <strong>标签名</strong>（如：thinking,internal）- 自动转换为贪婪匹配正则
+                <br>2. <strong>完整正则</strong>（如：/&lt;antml:thinking&gt;[\s\S]*?&lt;\/antml:thinking&gt;/gi）- 支持自定义模式和修饰符
+                <br>多个模式用英文逗号分隔。匹配的内容会被完全移除，不会出现在最终发送给酒馆的内容中。</small>
         </div>
         <div class="qrf_settings_block">
             <label for="qrf_extract_tags">标签摘取</label>
