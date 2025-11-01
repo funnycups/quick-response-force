@@ -17,6 +17,7 @@ export async function getCombinedWorldbookContent(context, apiSettings) {
         liveSettings.worldbookEnabled = panel.find('#qrf_worldbook_enabled').is(':checked');
         liveSettings.worldbookSource = panel.find('input[name="qrf_worldbook_source"]:checked').val() || 'character';
         liveSettings.selectedWorldbooks = panel.find('#qrf_selected_worldbooks').val() || [];
+        liveSettings.additionalWorldbooks = panel.find('#qrf_additional_worldbooks').val() || [];
         liveSettings.worldbookCharLimit = parseInt(panel.find('#qrf_worldbook_char_limit').val(), 10) || 60000;
 
         // 实时构建启用的条目列表，这部分逻辑模仿自 bindings.js 中的 saveEnabledEntries
@@ -39,6 +40,7 @@ export async function getCombinedWorldbookContent(context, apiSettings) {
             worldbookEnabled: apiSettings.worldbookEnabled,
             worldbookSource: apiSettings.worldbookSource,
             selectedWorldbooks: apiSettings.selectedWorldbooks,
+            additionalWorldbooks: apiSettings.additionalWorldbooks,
             worldbookCharLimit: apiSettings.worldbookCharLimit,
             enabledWorldbookEntries: apiSettings.enabledWorldbookEntries,
         };
@@ -57,9 +59,26 @@ export async function getCombinedWorldbookContent(context, apiSettings) {
         let bookNames = [];
         
         if (liveSettings.worldbookSource === 'manual') {
+            // 仅使用手动选择的世界书
             bookNames = liveSettings.selectedWorldbooks;
             if (bookNames.length === 0) return '';
+        } else if (liveSettings.worldbookSource === 'both') {
+            // 同时使用角色卡世界书和额外指定的世界书
+            const charLorebooks = await window.TavernHelper.getCharLorebooks({ type: 'all' });
+            if (charLorebooks.primary) bookNames.push(charLorebooks.primary);
+            if (charLorebooks.additional?.length) bookNames.push(...charLorebooks.additional);
+            
+            // 添加额外指定的世界书
+            const additionalBooks = liveSettings.additionalWorldbooks || [];
+            for (const bookName of additionalBooks) {
+                if (bookName && !bookNames.includes(bookName)) {
+                    bookNames.push(bookName);
+                }
+            }
+            
+            if (bookNames.length === 0) return '';
         } else {
+            // 默认：仅使用角色卡绑定的世界书
             const charLorebooks = await window.TavernHelper.getCharLorebooks({ type: 'all' });
             if (charLorebooks.primary) bookNames.push(charLorebooks.primary);
             if (charLorebooks.additional?.length) bookNames.push(...charLorebooks.additional);

@@ -27,9 +27,26 @@ export async function getCombinedWorldbookContent(context, apiSettings) {
         let bookNames = [];
         
         if (apiSettings.worldbookSource === 'manual') {
+            // 仅使用手动选择的世界书
             bookNames = apiSettings.selectedWorldbooks || [];
             if (bookNames.length === 0) return '';
+        } else if (apiSettings.worldbookSource === 'both') {
+            // 同时使用角色卡世界书和额外指定的世界书
+            const charLorebooks = await safeCharLorebooks({ type: 'all' });
+            if (charLorebooks.primary) bookNames.push(charLorebooks.primary);
+            if (charLorebooks.additional?.length) bookNames.push(...charLorebooks.additional);
+            
+            // 添加额外指定的世界书
+            const additionalBooks = apiSettings.additionalWorldbooks || [];
+            for (const bookName of additionalBooks) {
+                if (bookName && !bookNames.includes(bookName)) {
+                    bookNames.push(bookName);
+                }
+            }
+            
+            if (bookNames.length === 0) return '';
         } else {
+            // 默认：仅使用角色卡绑定的世界书
             const charLorebooks = await safeCharLorebooks({ type: 'all' });
             if (charLorebooks.primary) bookNames.push(charLorebooks.primary);
             if (charLorebooks.additional?.length) bookNames.push(...charLorebooks.additional);

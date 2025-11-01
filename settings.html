@@ -227,7 +227,12 @@
                 <label for="qrf_worldbook_source_character">使用角色卡绑定的世界书 (默认)</label>
                 <input type="radio" id="qrf_worldbook_source_manual" name="qrf_worldbook_source" value="manual">
                 <label for="qrf_worldbook_source_manual">手动选择世界书</label>
+                <input type="radio" id="qrf_worldbook_source_both" name="qrf_worldbook_source" value="both">
+                <label for="qrf_worldbook_source_both">角色卡世界书 + 额外指定世界书</label>
             </div>
+            <small class="notes">
+                <strong>角色卡世界书 + 额外指定世界书</strong>：同时使用角色卡绑定的世界书，并可以额外选择其他世界书进行合并使用。
+            </small>
         </div>
 
         <div class="qrf_settings_block">
@@ -248,6 +253,17 @@
                     <button id="qrf_refresh_worldbooks" class="menu_button" title="刷新世界书列表"><i class="fa-solid fa-sync"></i></button>
                 </div>
                 <small class="notes">按住Ctrl或Shift可选择多个世界书。插件将只从选定的世界书中读取条目。</small>
+            </div>
+        </div>
+
+        <div id="qrf_additional_worldbook_select_wrapper" style="display: none;">
+            <div class="qrf_settings_block">
+                <label for="qrf_additional_worldbooks">额外指定的世界书 (可多选)</label>
+                <div class="qrf_model_selector_wrapper">
+                    <select id="qrf_additional_worldbooks" class="text_pole" multiple size="5"></select>
+                    <button id="qrf_refresh_additional_worldbooks" class="menu_button" title="刷新世界书列表"><i class="fa-solid fa-sync"></i></button>
+                </div>
+                <small class="notes">按住Ctrl或Shift可选择多个世界书。这些世界书将与角色卡绑定的世界书合并使用。</small>
             </div>
         </div>
 

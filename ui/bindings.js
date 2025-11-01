@@ -73,14 +73,21 @@ function updateApiUrlVisibility(panel, apiMode) {
 /**
  * 根据选择的世界书来源，显示或隐藏手动选择区域。
  * @param {JQuery} panel - 设置面板的jQuery对象。
- * @param {string} source - 当前选择的来源 ('character' or 'manual')。
+ * @param {string} source - 当前选择的来源 ('character', 'manual', or 'both')。
  */
 function updateWorldbookSourceVisibility(panel, source) {
     const manualSelectionWrapper = panel.find('#qrf_worldbook_select_wrapper');
+    const additionalSelectionWrapper = panel.find('#qrf_additional_worldbook_select_wrapper');
+    
     if (source === 'manual') {
         manualSelectionWrapper.show();
+        additionalSelectionWrapper.hide();
+    } else if (source === 'both') {
+        manualSelectionWrapper.hide();
+        additionalSelectionWrapper.show();
     } else {
         manualSelectionWrapper.hide();
+        additionalSelectionWrapper.hide();
     }
 }
 
@@ -145,6 +152,7 @@ async function loadTavernApiProfiles(panel) {
 const characterSpecificSettings = [
     'worldbookSource',
     'selectedWorldbooks',
+    'additionalWorldbooks',
     'disabledWorldbookEntries'
 ];
 
@@ -338,6 +346,33 @@ async function loadWorldbooks(panel) {
     }
 }
 
+async function loadAdditionalWorldbooks(panel) {
+    const select = panel.find('#qrf_additional_worldbooks');
+    const apiSettings = getMergedApiSettings();
+    const currentSelection = apiSettings.additionalWorldbooks || [];
+    select.empty();
+
+    try {
+        const lorebooks = await window.TavernHelper.getLorebooks();
+        if (!lorebooks || lorebooks.length === 0) {
+            select.append($('<option>', { value: '', text: '未找到世界书', disabled: true }));
+            return;
+        }
+
+        lorebooks.forEach(name => {
+            const option = $('<option>', {
+                value: name,
+                text: name,
+                selected: currentSelection.includes(name)
+            });
+            select.append(option);
+        });
+    } catch (error) {
+        console.error(`[${extensionName}] 加载额外世界书失败:`, error);
+        toastr.error('无法加载世界书列表，请查看控制台。');
+    }
+}
+
 async function loadWorldbookEntries(panel) {
     const container = panel.find('#qrf_worldbook_entry_list_container');
     const countDisplay = panel.find('#qrf_worldbook_entry_count');
@@ -350,6 +385,31 @@ async function loadWorldbookEntries(panel) {
 
     if (currentSource === 'manual') {
         bookNames = apiSettings.selectedWorldbooks || [];
+    } else if (currentSource === 'both') {
+        // 同时使用角色卡世界书和额外指定的世界书
+        if (this_chid === -1 || !characters[this_chid]) {
+            container.html('<p class="notes">未选择角色。</p>');
+            countDisplay.text('');
+            return;
+        }
+        try {
+            const charLorebooks = await window.TavernHelper.getCharLorebooks({ type: 'all' });
+            if (charLorebooks.primary) bookNames.push(charLorebooks.primary);
+            if (charLorebooks.additional?.length) bookNames.push(...charLorebooks.additional);
+            
+            // 添加额外指定的世界书
+            const additionalBooks = apiSettings.additionalWorldbooks || [];
+            for (const bookName of additionalBooks) {
+                if (bookName && !bookNames.includes(bookName)) {
+                    bookNames.push(bookName);
+                }
+            }
+        } catch (error) {
+            console.error(`[${extensionName}] 获取角色世界书失败:`, error);
+            toastr.error('获取角色世界书失败。');
+            container.html('<p class="notes" style="color:red;">获取角色世界书失败。</p>');
+            return;
+        }
     } else {
         // 修复：在尝试获取角色世界书之前，先检查是否已加载角色
         if (this_chid === -1 || !characters[this_chid]) {
@@ -878,7 +938,9 @@ function loadSettings(panel) {
     
     // 加载世界书和条目 (使用角色卡设置)
     loadWorldbooks(panel).then(() => {
-        loadWorldbookEntries(panel);
+        loadAdditionalWorldbooks(panel).then(() => {
+            loadWorldbookEntries(panel);
+        });
     });
     
     // 加载酒馆API预设
@@ -1163,6 +1225,19 @@ export function initializeBindings() {
         const selected = $(this).val() || [];
         // 强制等待设置保存完成，再执行加载，避免竞态条件
         await saveSetting('selectedWorldbooks', selected);
+        await loadWorldbookEntries(panel);
+    });
+
+    // 额外世界书选择器和刷新按钮
+    panel.on('click.qrf', '#qrf_refresh_additional_worldbooks', () => {
+        loadAdditionalWorldbooks(panel).then(() => {
+            loadWorldbookEntries(panel);
+        });
+    });
+
+    panel.on('change.qrf', '#qrf_additional_worldbooks', async function() {
+        const selected = $(this).val() || [];
+        await saveSetting('additionalWorldbooks', selected);
         await loadWorldbookEntries(panel);
     });
 
