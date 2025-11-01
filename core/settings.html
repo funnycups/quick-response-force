@@ -113,6 +113,26 @@
     </fieldset>
 
     <fieldset class="settings-group">
+        <legend><i class="fas fa-shield-alt"></i> Jailbreak 提示词管理器</legend>
+        <small class="notes" style="display: block; margin-bottom: 10px;">
+            管理在核心提示词前后插入的自定义提示词。使用 <code>$CORE_PROMPTS</code> 占位符来指定核心提示词的插入位置。
+        </small>
+        
+        <div class="qrf_settings_block">
+            <div class="qrf_label_with_controls_wrapper">
+                <label>提示词列表</label>
+                <div>
+                    <button id="qrf_add_jailbreak_prompt" class="menu_button" title="添加新提示词"><i class="fa-solid fa-plus"></i> 添加提示词</button>
+                    <button id="qrf_add_core_placeholder" class="menu_button" title="插入核心提示词占位符"><i class="fa-solid fa-code"></i> 插入 $CORE_PROMPTS</button>
+                </div>
+            </div>
+            <div id="qrf_jailbreak_prompts_container" class="qrf_jailbreak_prompts_list">
+                <!-- Jailbreak提示词将在这里动态生成 -->
+            </div>
+        </div>
+    </fieldset>
+
+    <fieldset class="settings-group">
         <legend><i class="fas fa-edit"></i> 提示词指令</legend>
 
         <div class="qrf_settings_block">

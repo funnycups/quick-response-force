@@ -7,6 +7,7 @@ export const defaultSettings = {
     enabled: true,
     promptPresets: [],
     lastUsedPresetName: '', // 新增：用于存储上次使用的预设名称
+    jailbreakPrompts: [], // Jailbreak提示词管理器
     apiSettings: {
         apiMode: 'frontend', // 'backend', 'frontend', 'google', 'tavern'
         apiUrl: '',

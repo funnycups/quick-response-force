@@ -18,6 +18,7 @@ export const defaultSettings = {
         }
     ],
     lastUsedPresetName: '剧情索引', // 新增：用于存储上次使用的预设名称
+    jailbreakPrompts: [], // Jailbreak提示词管理器
     apiSettings: {
         apiMode: 'frontend', // 'backend', 'frontend', 'google', 'tavern'
         apiUrl: '',

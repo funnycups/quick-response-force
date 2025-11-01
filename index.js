@@ -296,7 +296,7 @@ async function runOptimizationLogic(userMessage) {
         if (minLength > 0) {
             for (let i = 0; i < maxRetries; i++) {
                 $toast.find('.toastr-message').text(`正在规划剧情... (尝试 ${i + 1}/${maxRetries})`);
-                const tempMessage = await callInterceptionApi(userMessage, slicedContext, finalApiSettings, worldbookContent, tableDataContent);
+                const tempMessage = await callInterceptionApi(userMessage, slicedContext, finalApiSettings, worldbookContent, tableDataContent, settings);
                 if (tempMessage && tempMessage.length >= minLength) {
                     processedMessage = tempMessage;
                     if ($toast) toastr.clear($toast);
@@ -309,7 +309,7 @@ async function runOptimizationLogic(userMessage) {
                 }
             }
         } else {
-            processedMessage = await callInterceptionApi(userMessage, slicedContext, finalApiSettings, worldbookContent, tableDataContent);
+            processedMessage = await callInterceptionApi(userMessage, slicedContext, finalApiSettings, worldbookContent, tableDataContent, settings);
         }
 
         if (processedMessage) {
