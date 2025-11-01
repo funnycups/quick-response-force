@@ -1168,11 +1168,9 @@ export function initializeBindings() {
         });
     });
 
-    panel.on('change.qrf', '#qrf_selected_worldbooks', async function() {
-        const selected = $(this).val() || [];
-        // 强制等待设置保存完成，再执行加载，避免竞态条件
-        await saveSetting('selectedWorldbooks', selected);
-        await loadWorldbookEntries(panel);
+    panel.on('change.qrf', '#qrf_worldbook_list_container input[type="checkbox"]', function() {
+        saveSelectedWorldbooks();
+        loadWorldbookEntries(panel);
     });
 
     // 额外世界书选择器和刷新按钮
@@ -1182,10 +1180,9 @@ export function initializeBindings() {
         });
     });
 
-    panel.on('change.qrf', '#qrf_additional_worldbooks', async function() {
-        const selected = $(this).val() || [];
-        await saveSetting('additionalWorldbooks', selected);
-        await loadWorldbookEntries(panel);
+    panel.on('change.qrf', '#qrf_additional_worldbook_list_container input[type="checkbox"]', function() {
+        saveAdditionalWorldbooks();
+        loadWorldbookEntries(panel);
     });
 
     panel.on('change.qrf', '#qrf_worldbook_entry_list_container input[type="checkbox"]', () => {
