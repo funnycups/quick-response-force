@@ -295,25 +295,28 @@ async function clearCharacterStaleSettings(type) {
 
 // ---- 世界书逻辑 ----
 async function loadWorldbooks(panel) {
-    const select = panel.find('#qrf_selected_worldbooks');
-    const apiSettings = getMergedApiSettings(); // 使用合并后的设置
+    const container = panel.find('#qrf_worldbook_list_container');
+    const apiSettings = getMergedApiSettings();
     const currentSelection = apiSettings.selectedWorldbooks || [];
-    select.empty();
+    container.empty();
 
     try {
         const lorebooks = await window.TavernHelper.getLorebooks();
         if (!lorebooks || lorebooks.length === 0) {
-            select.append($('<option>', { value: '', text: '未找到世界书', disabled: true }));
+            container.html('<p class="notes">未找到世界书</p>');
             return;
         }
 
-        lorebooks.forEach(name => {
-            const option = $('<option>', {
-                value: name,
-                text: name,
-                selected: currentSelection.includes(name)
-            });
-            select.append(option);
+        lorebooks.forEach((name, index) => {
+            const itemId = `qrf-worldbook-${index}`;
+            const isSelected = currentSelection.includes(name);
+            const item = $(`
+                <div class="qrf_worldbook_entry_item">
+                    <input type="checkbox" id="${itemId}" data-worldbook="${name}" ${isSelected ? 'checked' : ''}>
+                    <label for="${itemId}">${name}</label>
+                </div>
+            `);
+            container.append(item);
         });
     } catch (error) {
         console.error(`[${extensionName}] 加载世界书失败:`, error);
@@ -322,30 +325,55 @@ async function loadWorldbooks(panel) {
 }
 
 async function loadAdditionalWorldbooks(panel) {
-    const select = panel.find('#qrf_additional_worldbooks');
+    const container = panel.find('#qrf_additional_worldbook_list_container');
     const apiSettings = getMergedApiSettings();
     const currentSelection = apiSettings.additionalWorldbooks || [];
-    select.empty();
+    container.empty();
 
     try {
         const lorebooks = await window.TavernHelper.getLorebooks();
         if (!lorebooks || lorebooks.length === 0) {
-            select.append($('<option>', { value: '', text: '未找到世界书', disabled: true }));
+            container.html('<p class="notes">未找到世界书</p>');
             return;
         }
 
-        lorebooks.forEach(name => {
-            const option = $('<option>', {
-                value: name,
-                text: name,
-                selected: currentSelection.includes(name)
-            });
-            select.append(option);
+        lorebooks.forEach((name, index) => {
+            const itemId = `qrf-additional-worldbook-${index}`;
+            const isSelected = currentSelection.includes(name);
+            const item = $(`
+                <div class="qrf_worldbook_entry_item">
+                    <input type="checkbox" id="${itemId}" data-worldbook="${name}" ${isSelected ? 'checked' : ''}>
+                    <label for="${itemId}">${name}</label>
+                </div>
+            `);
+            container.append(item);
         });
     } catch (error) {
         console.error(`[${extensionName}] 加载额外世界书失败:`, error);
         toastr.error('无法加载世界书列表，请查看控制台。');
     }
+}
+
+function saveSelectedWorldbooks() {
+    const panel = $('#qrf_settings_panel');
+    const selectedBooks = [];
+    
+    panel.find('#qrf_worldbook_list_container input[type="checkbox"]:checked').each(function() {
+        selectedBooks.push($(this).data('worldbook'));
+    });
+    
+    saveSetting('selectedWorldbooks', selectedBooks);
+}
+
+function saveAdditionalWorldbooks() {
+    const panel = $('#qrf_settings_panel');
+    const selectedBooks = [];
+    
+    panel.find('#qrf_additional_worldbook_list_container input[type="checkbox"]:checked').each(function() {
+        selectedBooks.push($(this).data('worldbook'));
+    });
+    
+    saveSetting('additionalWorldbooks', selectedBooks);
 }
 
 async function loadWorldbookEntries(panel) {

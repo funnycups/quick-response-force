@@ -230,23 +230,27 @@
 
         <div id="qrf_worldbook_select_wrapper" style="display: none;">
             <div class="qrf_settings_block">
-                <label for="qrf_selected_worldbooks">选择世界书 (可多选)</label>
-                <div class="qrf_model_selector_wrapper">
-                    <select id="qrf_selected_worldbooks" class="text_pole" multiple size="5"></select>
+                <div class="qrf_label_with_controls_wrapper">
+                    <label>选择世界书 (可多选)</label>
                     <button id="qrf_refresh_worldbooks" class="menu_button" title="刷新世界书列表"><i class="fa-solid fa-sync"></i></button>
                 </div>
-                <small class="notes">按住Ctrl或Shift可选择多个世界书。插件将只从选定的世界书中读取条目。</small>
+                <div id="qrf_worldbook_list_container" class="qrf_worldbook_entry_list">
+                    <!-- 世界书复选框将在这里动态生成 -->
+                </div>
+                <small class="notes">选择需要使用的世界书。插件将只从选定的世界书中读取条目。</small>
             </div>
         </div>
 
         <div id="qrf_additional_worldbook_select_wrapper" style="display: none;">
             <div class="qrf_settings_block">
-                <label for="qrf_additional_worldbooks">额外指定的世界书 (可多选)</label>
-                <div class="qrf_model_selector_wrapper">
-                    <select id="qrf_additional_worldbooks" class="text_pole" multiple size="5"></select>
+                <div class="qrf_label_with_controls_wrapper">
+                    <label>额外指定的世界书 (可多选)</label>
                     <button id="qrf_refresh_additional_worldbooks" class="menu_button" title="刷新世界书列表"><i class="fa-solid fa-sync"></i></button>
                 </div>
-                <small class="notes">按住Ctrl或Shift可选择多个世界书。这些世界书将与角色卡绑定的世界书合并使用。</small>
+                <div id="qrf_additional_worldbook_list_container" class="qrf_worldbook_entry_list">
+                    <!-- 额外世界书复选框将在这里动态生成 -->
+                </div>
+                <small class="notes">选择额外的世界书。这些世界书将与角色卡绑定的世界书合并使用。</small>
             </div>
         </div>
 
