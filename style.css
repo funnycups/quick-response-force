@@ -3,7 +3,6 @@
 /* 1. 基础与字体设置 */
 #qrf_settings_panel {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
-    color: var(--text_color, #E0E0E0);
 }
 
 /* 2. 头部与尾部 */
@@ -11,54 +10,46 @@
     text-align: center;
     padding-bottom: 15px;
     margin-bottom: 25px;
-    border-bottom: 1px solid var(--border-color, #3a3a3a);
+    border-bottom: 1px solid;
+    opacity: 0.3;
 }
 
 #qrf_settings_panel .qrf-header h4 {
     margin: 0;
     font-size: 1.4em;
-    font-weight: 400; /* 更柔和的字重 */
-    color: var(--text_color, #FFFFFF);
+    font-weight: 400;
 }
 
 #qrf_settings_panel .qrf-header h4 i {
     margin-right: 12px;
-    color: var(--primary, #00BFFF); /* 深天蓝作为强调色 */
 }
 
 #qrf_settings_panel .qrf_footer {
     text-align: center;
     padding-top: 15px;
     margin-top: 25px;
-    border-top: 1px solid var(--border-color, #3a3a3a);
+    border-top: 1px solid;
+    opacity: 0.5;
     font-size: 0.8em;
-    color: var(--text_secondary, #999);
 }
 
 /* 3. 设置组 (Fieldset) */
 #qrf_settings_panel .settings-group {
-    background-color: var(--background-color-secondary, rgba(40, 40, 40, 0.8));
-    border: 1px solid var(--border-color, #3a3a3a);
+    border: 1px solid;
     padding: 20px 25px;
     margin-bottom: 25px;
-    border-radius: 12px; /* 更大的圆角 */
-    transition: border-color 0.3s ease;
-}
-
-#qrf_settings_panel .settings-group:hover {
-    border-color: var(--primary-hover, #4FC3F7);
+    border-radius: 12px;
+    opacity: 0.8;
 }
 
 #qrf_settings_panel .settings-group legend {
     font-weight: 600;
     font-size: 1.15em;
     padding: 0 10px;
-    color: var(--text_color, #F0F0F0);
 }
 
 #qrf_settings_panel .settings-group legend i {
     margin-right: 10px;
-    color: var(--primary, #00BFFF);
 }
 
 /* 4. 设置项布局与标签 */
@@ -72,14 +63,13 @@
     display: block;
     margin-bottom: 10px;
     font-weight: 500;
-    color: var(--text_secondary, #CCCCCC);
     font-size: 0.9em;
 }
 
 #qrf_settings_panel .qrf_settings_block .notes,
 #qrf_settings_panel .qrf_settings_block_hint {
     font-size: 0.8em;
-    color: var(--text_tertiary, #999);
+    opacity: 0.7;
     margin-top: 8px;
     line-height: 1.5;
 }
@@ -88,9 +78,7 @@
 #qrf_settings_panel .text_pole,
 #qrf_settings_panel select {
     width: 100%;
-    background-color: var(--background-color, #1A1A1A);
-    color: var(--text_color, #E0E0E0);
-    border: 1px solid var(--border-color, #444);
+    border: 1px solid;
     border-radius: 8px;
     padding: 12px;
     box-sizing: border-box;
@@ -100,8 +88,6 @@
 #qrf_settings_panel .text_pole:focus,
 #qrf_settings_panel select:focus {
     outline: none;
-    border-color: var(--primary, #00BFFF);
-    box-shadow: 0 0 8px rgba(0, 191, 255, 0.25);
 }
 
 #qrf_settings_panel textarea.text_pole {
@@ -143,8 +129,8 @@
 
 #qrf_settings_panel #qrf_worldbook_entry_count {
     font-size: 0.9em;
-    color: var(--text_secondary, #ccc);
-    margin-right: 5px; /* 与按钮的间距 */
+    opacity: 0.7;
+    margin-right: 5px;
 }
 
 /* 7. 开关 (Toggle Switch) */
@@ -162,7 +148,7 @@
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--background-color-tertiary, #555);
+    background-color: #ccc;
     transition: .3s;
     border-radius: 26px;
 }
@@ -178,7 +164,7 @@
     border-radius: 50%;
 }
 #qrf_settings_panel input:checked + .slider {
-    background-color: var(--primary, #00BFFF);
+    background-color: #2196F3;
 }
 #qrf_settings_panel input:checked + .slider:before {
     transform: translateX(22px);
@@ -189,17 +175,16 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    background-color: rgba(0,0,0,0.2);
     padding: 15px;
     border-radius: 10px;
-    margin-top: -5px; /*向上微调*/
+    margin-top: -5px;
+    opacity: 0.9;
 }
 #qrf_settings_panel .settings-group > .qrf_settings_block:first-child label {
     margin-bottom: 0;
 }
 #qrf_settings_panel .settings-group > .qrf_settings_block:first-child strong {
     font-size: 1.05em;
-    color: var(--text_color, #FFFFFF);
 }
 
 /* 8. 滑块 (Range Input) */
@@ -207,7 +192,7 @@
     -webkit-appearance: none;
     width: 100%;
     height: 6px;
-    background: var(--background-color-tertiary, #555);
+    background: #ddd;
     border-radius: 6px;
     outline: none;
     transition: opacity .2s;
@@ -217,20 +202,18 @@
     appearance: none;
     width: 20px;
     height: 20px;
-    background: #FFFFFF;
-    border: 3px solid var(--primary, #00BFFF);
+    background: #2196F3;
     cursor: pointer;
     border-radius: 50%;
     transition: background 0.2s;
 }
 #qrf_settings_panel input[type="range"]:hover::-webkit-slider-thumb {
-    background: #E0E0E0;
+    background: #0b7dda;
 }
 #qrf_settings_panel input[type="range"]::-moz-range-thumb {
     width: 20px;
     height: 20px;
-    background: #FFFFFF;
-    border: 3px solid var(--primary, #00BFFF);
+    background: #2196F3;
     cursor: pointer;
     border-radius: 50%;
 }
@@ -242,10 +225,10 @@
     flex-wrap: wrap;
     align-items: center;
     margin-top: 5px;
-    background-color: var(--background-color, #1A1A1A);
     padding: 15px;
     border-radius: 8px;
-    border: 1px solid var(--border-color, #3a3a3a);
+    border: 1px solid;
+    opacity: 0.8;
 }
 #qrf_settings_panel .qrf_radio_group label {
     display: flex;
@@ -254,28 +237,24 @@
     font-size: 0.9em;
     margin-bottom: 0;
 }
-#qrf_settings_panel .qrf_radio_group input[type="radio"] {
-    margin-right: 8px;
-    accent-color: var(--primary, #00BFFF);
-}
 
 /* API模式 - 2x2 网格布局 */
 #qrf_settings_panel .qrf_api_mode_grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px; /* 网格间距 */
+    gap: 15px;
     padding: 15px;
 }
 #qrf_settings_panel .qrf_api_mode_grid .qrf_radio_option {
     display: flex;
     align-items: center;
-    background-color: var(--background-color-tertiary, #2a2a2a);
     padding: 10px;
     border-radius: 6px;
-    transition: background-color 0.2s ease;
+    border: 1px solid;
+    opacity: 0.7;
 }
 #qrf_settings_panel .qrf_api_mode_grid .qrf_radio_option:hover {
-    background-color: var(--background-color-hover, #3a3a3a);
+    opacity: 1;
 }
 #qrf_settings_panel .qrf_api_mode_grid .qrf_radio_option label {
     margin-bottom: 0;
@@ -287,10 +266,10 @@
 .qrf_worldbook_entry_list {
     max-height: 220px;
     overflow-y: auto;
-    border: 1px solid var(--border-color, #444);
+    border: 1px solid;
     padding: 10px;
     border-radius: 8px;
-    background-color: var(--background-color, #1A1A1A);
+    opacity: 0.8;
 }
 
 .qrf_worldbook_entry_item {
@@ -299,25 +278,22 @@
     margin-bottom: 5px;
     padding: 8px 12px;
     border-radius: 6px;
-    transition: background-color 0.2s ease;
 }
 
 .qrf_worldbook_entry_item:hover {
-    background-color: var(--primary-hover-faded, rgba(0, 191, 255, 0.1));
+    opacity: 0.9;
 }
 
 .qrf_worldbook_entry_item input[type="checkbox"] {
     margin-right: 12px;
     width: 16px;
     height: 16px;
-    accent-color: var(--primary, #00BFFF);
 }
 
 .qrf_worldbook_entry_item label {
     font-size: 0.9em;
     cursor: pointer;
     user-select: none;
-    color: var(--text_secondary, #ccc);
     margin-bottom: 0;
 }
 
