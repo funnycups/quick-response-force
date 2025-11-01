@@ -150,7 +150,6 @@ async function loadTavernApiProfiles(panel) {
 
 // 需要保存到角色卡的设置项列表
 const characterSpecificSettings = [
-    'worldbookSource',
     'selectedWorldbooks',
     'additionalWorldbooks',
     'enabledWorldbookEntries'
