@@ -36,6 +36,11 @@
     <fieldset class="settings-group">
         <legend><i class="fas fa-tags"></i> 内容处理</legend>
         <div class="qrf_settings_block">
+            <label for="qrf_exclude_tags">标签排除（贪婪匹配）</label>
+            <input id="qrf_exclude_tags" type="text" class="text_pole" placeholder="例如: thinking,internal" />
+            <small class="notes">在提取标签前，先用贪婪匹配排除指定的标签及其内容。多个标签用英文逗号分隔。这些标签会被完全移除，不会出现在最终发送给酒馆的内容中。</small>
+        </div>
+        <div class="qrf_settings_block">
             <label for="qrf_extract_tags">标签摘取</label>
             <input id="qrf_extract_tags" type="text" class="text_pole" placeholder="例如: think,plot" />
             <small class="notes">输入希望从AI回复中提取并注入酒馆的标签，多个标签用英文逗号分隔。AI的完整回复仍会保存在聊天记录中。</small>

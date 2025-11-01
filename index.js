@@ -316,6 +316,22 @@ async function runOptimizationLogic(userMessage) {
             // [架构重构] 将本次优化结果暂存（保存完整回复）
             tempPlotToSave = processedMessage;
 
+            // [新功能] 标签排除逻辑（在提取前先排除指定标签）
+            const tagsToExclude = (finalApiSettings.excludeTags || '').trim();
+            if (tagsToExclude) {
+                const excludeTagNames = tagsToExclude.split(',').map(t => t.trim()).filter(t => t);
+                if (excludeTagNames.length > 0) {
+                    let workingMessage = processedMessage;
+                    excludeTagNames.forEach(tagName => {
+                        const safeTagName = escapeRegExp(tagName);
+                        const regex = new RegExp(`<${safeTagName}[^>]*>[\\s\\S]*<\\/${safeTagName}>`, 'gi');
+                        workingMessage = workingMessage.replace(regex, '');
+                    });
+                    processedMessage = workingMessage;
+                    console.log(`[${extension_name}] 已排除标签: ${excludeTagNames.join(', ')}`);
+                }
+            }
+
             // [新功能] 标签摘取逻辑
             let messageForTavern = processedMessage; // 默认使用完整回复
             const tagsToExtract = (finalApiSettings.extractTags || '').trim();

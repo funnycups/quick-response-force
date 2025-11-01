@@ -494,6 +494,7 @@ function saveAsNewPreset(panel) {
         rateErotic: parseFloat(panel.find('#qrf_rate_erotic').val()),
         rateCuckold: parseFloat(panel.find('#qrf_rate_cuckold').val()),
         // [新功能] 导出时包含新增的设置
+        excludeTags: panel.find('#qrf_exclude_tags').val(),
         extractTags: panel.find('#qrf_extract_tags').val(),
         minLength: parseInt(panel.find('#qrf_min_length').val(), 10),
         contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10)
@@ -557,6 +558,7 @@ function overwriteSelectedPreset(panel) {
         rateErotic: parseFloat(panel.find('#qrf_rate_erotic').val()),
         rateCuckold: parseFloat(panel.find('#qrf_rate_cuckold').val()),
         // [新功能] 覆盖时包含新增的设置
+        excludeTags: panel.find('#qrf_exclude_tags').val(),
         extractTags: panel.find('#qrf_extract_tags').val(),
         minLength: parseInt(panel.find('#qrf_min_length').val(), 10),
         contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10)
@@ -673,6 +675,7 @@ function importPromptPresets(file, panel) {
                         rateErotic: preset.rateErotic ?? 1.0,
                         rateCuckold: preset.rateCuckold ?? 1.0,
                         // [新功能] 导入时识别新设置，并提供默认值以兼容旧预设
+                        excludeTags: preset.excludeTags || '',
                         extractTags: preset.extractTags || '',
                         minLength: preset.minLength ?? defaultSettings.minLength,
                         contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount
@@ -762,7 +765,8 @@ function loadSettings(panel) {
     panel.find('#qrf_context_turn_count').val(apiSettings.contextTurnCount);
     panel.find('#qrf_worldbook_char_limit').val(apiSettings.worldbookCharLimit);
 
-    // 加载标签摘取设置
+    // 加载标签排除和摘取设置
+    panel.find('#qrf_exclude_tags').val(apiSettings.excludeTags || '');
     panel.find('#qrf_extract_tags').val(apiSettings.extractTags || '');
 
     // 加载匹配替换速率
@@ -1004,6 +1008,7 @@ export function initializeBindings() {
                 rateErotic: selectedPreset.rateErotic ?? 1.0,
                 rateCuckold: selectedPreset.rateCuckold ?? 1.0,
                  // [新功能] 加载预设时应用新设置
+                excludeTags: selectedPreset.excludeTags || '',
                 extractTags: selectedPreset.extractTags || '',
                 minLength: selectedPreset.minLength ?? defaultSettings.minLength,
                 contextTurnCount: selectedPreset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount
@@ -1017,6 +1022,7 @@ export function initializeBindings() {
             panel.find('#qrf_rate_personal').val(presetData.ratePersonal);
             panel.find('#qrf_rate_erotic').val(presetData.rateErotic);
             panel.find('#qrf_rate_cuckold').val(presetData.rateCuckold);
+            panel.find('#qrf_exclude_tags').val(presetData.excludeTags);
             panel.find('#qrf_extract_tags').val(presetData.extractTags);
             panel.find('#qrf_min_length').val(presetData.minLength);
             panel.find('#qrf_context_turn_count').val(presetData.contextTurnCount);

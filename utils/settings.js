@@ -31,6 +31,7 @@ export const defaultSettings = {
         frequencyPenalty: 1,
         contextTurnCount: 3,
         extractTags: '', // [新功能] 标签摘取
+        excludeTags: '', // [新功能] 标签排除（在提取前先排除）
         worldbookEnabled: true,
         worldbookSource: 'character', // 'character' or 'manual'
         worldbookCharLimit: 60000,
