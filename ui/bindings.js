@@ -725,6 +725,86 @@ function importPromptPresets(file, panel) {
 }
 
 /**
+ * 加载 jailbreak 提示词到UI
+ * @param {JQuery} panel - 设置面板的jQuery对象
+ */
+function loadJailbreakPrompts(panel) {
+    const container = panel.find('#qrf_jailbreak_prompts_container');
+    const jailbreakPrompts = extension_settings[extensionName]?.jailbreakPrompts || [];
+    
+    container.empty();
+    
+    jailbreakPrompts.forEach((prompt, index) => {
+        const item = createJailbreakPromptItem(prompt, index);
+        container.append(item);
+    });
+}
+
+/**
+ * 创建单个 jailbreak 提示词 UI 项
+ * @param {object} prompt - 提示词对象 {role, content}
+ * @param {number} index - 索引
+ * @returns {JQuery} 提示词项元素
+ */
+function createJailbreakPromptItem(prompt, index) {
+    const isPlaceholder = prompt.content === '$CORE_PROMPTS';
+    
+    const item = $(`
+        <div class="qrf_jailbreak_prompt_item" data-index="${index}">
+            <div class="qrf_jb_drag_handle" title="拖动排序">
+                <i class="fa-solid fa-grip-vertical"></i>
+            </div>
+            <div class="qrf_jb_content">
+                ${!isPlaceholder ? `
+                <select class="qrf_jb_role_select">
+                    <option value="system" ${prompt.role === 'system' ? 'selected' : ''}>System</option>
+                    <option value="user" ${prompt.role === 'user' ? 'selected' : ''}>User</option>
+                    <option value="assistant" ${prompt.role === 'assistant' ? 'selected' : ''}>Assistant</option>
+                </select>
+                ` : '<strong style="color: #2196F3;">$CORE_PROMPTS 占位符</strong>'}
+                <textarea class="qrf_jb_textarea" placeholder="${isPlaceholder ? '核心提示词将在此位置插入' : '输入提示词内容...'}" ${isPlaceholder ? 'readonly' : ''}>${prompt.content || ''}</textarea>
+            </div>
+            <div class="qrf_jb_actions">
+                <button class="menu_button qrf_jb_move_up" title="上移" ${index === 0 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <button class="menu_button qrf_jb_move_down" title="下移">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </button>
+                <button class="menu_button qrf_jb_delete" title="删除">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `);
+    
+    return item;
+}
+
+/**
+ * 保存 jailbreak 提示词
+ * @param {JQuery} panel - 设置面板的jQuery对象
+ */
+function saveJailbreakPrompts(panel) {
+    const container = panel.find('#qrf_jailbreak_prompts_container');
+    const prompts = [];
+    
+    container.find('.qrf_jailbreak_prompt_item').each(function() {
+        const item = $(this);
+        const content = item.find('.qrf_jb_textarea').val();
+        
+        if (content === '$CORE_PROMPTS') {
+            prompts.push({ content: '$CORE_PROMPTS' });
+        } else {
+            const role = item.find('.qrf_jb_role_select').val() || 'system';
+            prompts.push({ role, content });
+        }
+    });
+    
+    saveSetting('jailbreakPrompts', prompts);
+}
+
+/**
  * 加载设置到UI界面。
  * @param {JQuery} panel - 设置面板的jQuery对象。
  */
@@ -803,6 +883,9 @@ function loadSettings(panel) {
     
     // 加载酒馆API预设
     loadTavernApiProfiles(panel);
+    
+    // 加载 jailbreak 提示词
+    loadJailbreakPrompts(panel);
 }
 
 /**
@@ -1095,5 +1178,93 @@ export function initializeBindings() {
     panel.on('click.qrf', '#qrf_worldbook_entry_deselect_all', () => {
         panel.find('#qrf_worldbook_entry_list_container input[type="checkbox"]').prop('checked', false);
         saveDisabledEntries();
+    });
+
+    // ---- Jailbreak 提示词管理器事件绑定 ----
+    
+    // 添加新提示词
+    panel.on('click.qrf', '#qrf_add_jailbreak_prompt', function() {
+        console.log('[QRF] 添加提示词按钮被点击');
+        try {
+            const container = panel.find('#qrf_jailbreak_prompts_container');
+            console.log('[QRF] Container found:', container.length);
+            const newPrompt = { role: 'system', content: '' };
+            const index = container.find('.qrf_jailbreak_prompt_item').length;
+            console.log('[QRF] Creating item at index:', index);
+            const item = createJailbreakPromptItem(newPrompt, index);
+            container.append(item);
+            saveJailbreakPrompts(panel);
+            toastr.success('已添加新提示词');
+        } catch (error) {
+            console.error('[QRF] Error adding jailbreak prompt:', error);
+            toastr.error('添加提示词失败: ' + error.message);
+        }
+    });
+    
+    // 添加核心提示词占位符
+    panel.on('click.qrf', '#qrf_add_core_placeholder', function() {
+        const container = panel.find('#qrf_jailbreak_prompts_container');
+        const hasPlaceholder = container.find('.qrf_jb_textarea').filter(function() {
+            return $(this).val() === '$CORE_PROMPTS';
+        }).length > 0;
+        
+        if (hasPlaceholder) {
+            toastr.warning('$CORE_PROMPTS 占位符已存在');
+            return;
+        }
+        
+        const newPrompt = { content: '$CORE_PROMPTS' };
+        const index = container.find('.qrf_jailbreak_prompt_item').length;
+        const item = createJailbreakPromptItem(newPrompt, index);
+        container.append(item);
+        saveJailbreakPrompts(panel);
+        toastr.success('已插入核心提示词占位符');
+    });
+    
+    // 删除提示词
+    panel.on('click.qrf', '.qrf_jb_delete', function() {
+        const item = $(this).closest('.qrf_jailbreak_prompt_item');
+        if (confirm('确定要删除这个提示词吗？')) {
+            item.remove();
+            saveJailbreakPrompts(panel);
+            loadJailbreakPrompts(panel);
+            toastr.success('已删除提示词');
+        }
+    });
+    
+    // 上移提示词
+    panel.on('click.qrf', '.qrf_jb_move_up', function() {
+        const item = $(this).closest('.qrf_jailbreak_prompt_item');
+        const prev = item.prev('.qrf_jailbreak_prompt_item');
+        if (prev.length) {
+            item.insertBefore(prev);
+            saveJailbreakPrompts(panel);
+            loadJailbreakPrompts(panel);
+        }
+    });
+    
+    // 下移提示词
+    panel.on('click.qrf', '.qrf_jb_move_down', function() {
+        const item = $(this).closest('.qrf_jailbreak_prompt_item');
+        const next = item.next('.qrf_jailbreak_prompt_item');
+        if (next.length) {
+            item.insertAfter(next);
+            saveJailbreakPrompts(panel);
+            loadJailbreakPrompts(panel);
+        }
+    });
+    
+    // 角色选择变化
+    panel.on('change.qrf', '.qrf_jb_role_select', function() {
+        saveJailbreakPrompts(panel);
+    });
+    
+    // 内容变化
+    panel.on('input.qrf change.qrf', '.qrf_jb_textarea', function() {
+        clearTimeout($(this).data('saveTimeout'));
+        const timeout = setTimeout(() => {
+            saveJailbreakPrompts(panel);
+        }, 500);
+        $(this).data('saveTimeout', timeout);
     });
 }
