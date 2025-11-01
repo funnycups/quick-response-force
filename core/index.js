@@ -139,6 +139,10 @@ async function runOptimizationLogic(userMessage) {
             // [新增] 实时从UI读取上下文轮数，确保设置能立即生效
             settings.apiSettings.contextTurnCount = parseInt(panel.find('#qrf_context_turn_count').val(), 10) || 0;
             
+            // [修复] 实时从UI读取标签处理设置
+            settings.apiSettings.excludeTags = panel.find('#qrf_exclude_tags').val() || '';
+            settings.apiSettings.extractTags = panel.find('#qrf_extract_tags').val() || '';
+            
             // [修复] 实时从UI读取提示词和速率设置，确保选择预设后立即生效
             settings.apiSettings.mainPrompt = panel.find('#qrf_main_prompt').val();
             settings.apiSettings.systemPrompt = panel.find('#qrf_system_prompt').val();
