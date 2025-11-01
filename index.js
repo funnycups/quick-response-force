@@ -313,10 +313,7 @@ async function runOptimizationLogic(userMessage) {
         }
 
         if (processedMessage) {
-            // [架构重构] 将本次优化结果暂存（保存完整回复）
-            tempPlotToSave = processedMessage;
-
-            // [新功能] 标签排除逻辑（在提取前先排除指定标签）
+            // [新功能] 标签排除逻辑（在保存和提取前先排除指定标签）
             const tagsToExclude = (finalApiSettings.excludeTags || '').trim();
             if (tagsToExclude) {
                 const excludeTagNames = tagsToExclude.split(',').map(t => t.trim()).filter(t => t);
@@ -331,6 +328,10 @@ async function runOptimizationLogic(userMessage) {
                     console.log(`[${extension_name}] 已排除标签: ${excludeTagNames.join(', ')}`);
                 }
             }
+
+            // [架构重构] 将排除标签后的结果暂存到消息历史
+            // 这样保存的数据就不包含被排除的标签内容
+            tempPlotToSave = processedMessage;
 
             // [新功能] 标签摘取逻辑
             let messageForTavern = processedMessage; // 默认使用完整回复
