@@ -11,7 +11,7 @@ import { fetchModels, testApiConnection } from '../core/api.js';
  * 手动触发所有设置的保存。
  * 这对于在关闭面板等事件时确保数据被保存非常有用。
  */
-export function saveAllSettings() {
+export async function saveAllSettings() {
     const panel = $('#qrf_settings_panel');
     if (panel.length === 0) return;
 
@@ -23,8 +23,8 @@ export function saveAllSettings() {
     // 对于滑块，input事件可能更合适，但change也应在值改变后触发
     panel.find('input[type="range"]').trigger('change.qrf');
     
-    // 确保世界书条目也被保存
-    saveDisabledEntries();
+    // [BUG修复] 确保世界书条目也被保存，并等待保存完成
+    await saveDisabledEntries();
     
     toastr.info('设置已自动保存。');
 }
@@ -170,6 +170,7 @@ async function saveSetting(key, value) {
         const character = characters[this_chid];
         if (!character) {
             // 在没有角色卡的情况下，静默失败，不保存角色特定设置
+            console.warn(`[${extensionName}] 无法保存 ${key}：当前没有选中角色`);
             return;
         }
 
@@ -178,6 +179,9 @@ async function saveSetting(key, value) {
         if (!character.data.extensions[extensionName].apiSettings) character.data.extensions[extensionName].apiSettings = {};
         
         character.data.extensions[extensionName].apiSettings[key] = value;
+        
+        console.log(`[${extensionName}] 准备保存角色卡设置: ${key} ->`, value);
+        console.log(`[${extensionName}] 角色卡路径: ${character.avatar}`);
         
         // 使用SillyTavern的API来异步保存角色数据
         try {
@@ -191,12 +195,13 @@ async function saveSetting(key, value) {
             });
 
             if (!response.ok) {
-                throw new Error(`API call failed with status: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`API call failed with status: ${response.status}, body: ${errorText}`);
             }
-            console.log(`[${extensionName}] 角色卡设置已更新: ${key} ->`, value);
+            console.log(`[${extensionName}] ✅ 角色卡设置已成功保存到文件: ${key}`);
         } catch (error) {
-            console.error(`[${extensionName}] 保存角色数据失败:`, error);
-            toastr.error('无法保存角色卡设置，请检查控制台。');
+            console.error(`[${extensionName}] ❌ 保存角色数据失败:`, error);
+            toastr.error(`无法保存角色卡设置 (${key})，请检查控制台。`);
         }
 
     } else {
@@ -567,7 +572,7 @@ async function loadWorldbookEntries(panel) {
 }
 
 
-function saveDisabledEntries() {
+async function saveDisabledEntries() {
     const panel = $('#qrf_settings_panel');
     let disabledEntries = {};
 
@@ -592,7 +597,8 @@ function saveDisabledEntries() {
     });
 
     console.log(`[${extensionName}] 保存禁用的世界书条目:`, disabledEntries);
-    saveSetting('disabledWorldbookEntries', disabledEntries);
+    await saveSetting('disabledWorldbookEntries', disabledEntries);
+    console.log(`[${extensionName}] 禁用的世界书条目已保存到角色卡文件`);
 }
 
 /**
