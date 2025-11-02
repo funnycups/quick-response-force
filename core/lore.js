@@ -122,8 +122,12 @@ export async function getCombinedWorldbookContent(context, apiSettings) {
 
         const combinedContent = finalContent.join('\n\n---\n\n');
         
-        const limit = apiSettings.worldbookCharLimit || 60000;
-        if (combinedContent.length > limit) {
+        // [修复] 支持设为0来禁用字符限制
+        const limit = apiSettings.worldbookCharLimit !== undefined 
+            ? apiSettings.worldbookCharLimit 
+            : 60000;
+        
+        if (limit > 0 && combinedContent.length > limit) {
             console.log(`[剧情优化大师] 世界书内容 (${combinedContent.length} chars) 超出限制 (${limit} chars)，将被截断。`);
             return combinedContent.substring(0, limit);
         }

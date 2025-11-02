@@ -220,9 +220,9 @@
 
         <div class="qrf_settings_block">
             <label for="qrf_worldbook_char_limit">世界书最大字符数</label>
-            <input type="number" id="qrf_worldbook_char_limit" class="text_pole" min="1000" max="200000" step="1000" value="60000">
+            <input type="number" id="qrf_worldbook_char_limit" class="text_pole" min="0" max="200000" step="1000" value="60000">
             <div class="qrf_settings_block_hint" style="color: var(--text_secondary); margin-top: 5px; font-size: 0.8em;">
-                从上到下对准备发送到上下文中的世界书内容进行一个按照对应字符数量的截断，防止世界书内容过多引起AI不正常回复。
+                从上到下对准备发送到上下文中的世界书内容进行一个按照对应字符数量的截断，防止世界书内容过多引起AI不正常回复。<strong>设为0表示不限制。</strong>
             </div>
         </div>
 
