@@ -574,17 +574,37 @@ async function loadWorldbookEntries(panel) {
 
 async function saveDisabledEntries() {
     const panel = $('#qrf_settings_panel');
+    
+    // [BUG修复] 获取当前所有显示的世界书名称
+    const currentVisibleBooks = new Set();
+    panel.find('#qrf_worldbook_entry_list_container input[type="checkbox"]').each(function() {
+        currentVisibleBooks.add($(this).data('book'));
+    });
+    
+    // [BUG修复] 从角色卡读取现有的禁用列表
+    const character = characters[this_chid];
+    const existingDisabledEntries = character?.data?.extensions?.[extensionName]?.apiSettings?.disabledWorldbookEntries || {};
+    
+    // [核心修复] 首先，显式清空当前可见的所有世界书的条目（设为空数组）
     let disabledEntries = {};
+    currentVisibleBooks.forEach(bookName => {
+        disabledEntries[bookName] = [];
+    });
+    
+    // [核心修复] 保留不在当前视图中的世界书的禁用状态
+    Object.keys(existingDisabledEntries).forEach(bookName => {
+        if (!currentVisibleBooks.has(bookName)) {
+            disabledEntries[bookName] = existingDisabledEntries[bookName];
+        }
+    });
 
+    // 然后，添加当前未勾选的条目
     panel.find('#qrf_worldbook_entry_list_container input[type="checkbox"]').each(function() {
         const bookName = $(this).data('book');
         const uid = parseInt($(this).data('uid'));
 
         // [功能更新] 只记录未勾选的条目
         if (!$(this).is(':checked')) {
-            if (!disabledEntries[bookName]) {
-                disabledEntries[bookName] = [];
-            }
             disabledEntries[bookName].push(uid);
         }
     });
@@ -597,6 +617,7 @@ async function saveDisabledEntries() {
     });
 
     console.log(`[${extensionName}] 保存禁用的世界书条目:`, disabledEntries);
+    console.log(`[${extensionName}] 当前可见的世界书:`, Array.from(currentVisibleBooks));
     await saveSetting('disabledWorldbookEntries', disabledEntries);
     console.log(`[${extensionName}] 禁用的世界书条目已保存到角色卡文件`);
 }
