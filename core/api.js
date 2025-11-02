@@ -251,12 +251,33 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
     const validateKeywords = (content) => {
         if (requiredKeywords.length === 0) return true;
 
+        console.log(`[${extensionName}] === 开始关键词验证 ===`);
+        console.log(`[${extensionName}] 需要验证的关键词数量: ${requiredKeywords.length}`);
+        console.log(`[${extensionName}] 关键词列表:`, requiredKeywords);
+        console.log(`[${extensionName}] 内容总长度: ${content.length} 字符`);
+        console.log(`[${extensionName}] 内容开头（前500字符）:`, content.substring(0, 500));
+        console.log(`[${extensionName}] 内容结尾（后500字符）:`, content.substring(Math.max(0, content.length - 500)));
+
         for (const keyword of requiredKeywords) {
-            if (!content.includes(keyword)) {
+            const found = content.includes(keyword);
+            console.log(`[${extensionName}] 检查关键词 "${keyword}" (长度: ${keyword.length}): ${found ? '✓ 找到' : '✗ 未找到'}`);
+            
+            if (!found) {
+                // 尝试不区分大小写查找以帮助诊断
+                const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                const caseInsensitiveFound = regex.test(content);
+                if (caseInsensitiveFound) {
+                    console.warn(`[${extensionName}] ⚠️ 发现大小写不匹配的版本！`);
+                }
+                
                 console.warn(`[${extensionName}] 回复缺少必需关键词: "${keyword}"`);
+                console.log(`[${extensionName}] === 关键词验证失败 ===`);
                 return false;
             }
         }
+        
+        console.log(`[${extensionName}] ✓ 所有关键词验证通过`);
+        console.log(`[${extensionName}] === 关键词验证结束 ===`);
         return true;
     };
 
