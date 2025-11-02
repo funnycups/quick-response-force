@@ -139,6 +139,10 @@ async function runOptimizationLogic(userMessage) {
             // [新增] 实时从UI读取上下文轮数，确保设置能立即生效
             settings.apiSettings.contextTurnCount = parseInt(panel.find('#qrf_context_turn_count').val(), 10) || 0;
             
+            // [新增] 实时从UI读取关键词和重试次数设置
+            settings.apiSettings.requiredKeywords = panel.find('#qrf_required_keywords').val() || '';
+            settings.apiSettings.maxRetries = parseInt(panel.find('#qrf_max_retries').val(), 10) || 3;
+            
             // [修复] 实时从UI读取标签处理设置
             settings.apiSettings.excludeTags = panel.find('#qrf_exclude_tags').val() || '';
             settings.apiSettings.extractTags = panel.find('#qrf_extract_tags').val() || '';
@@ -235,13 +239,24 @@ async function runOptimizationLogic(userMessage) {
         const finalApiSettings = { ...apiSettings, ...processedPrompts };
         const minLength = settings.minLength || 0;
         let processedMessage = null;
-        const maxRetries = 3;
+        const maxRetries = apiSettings.maxRetries || 3;
 
+        // [重构] 使用 callInterceptionApi 内置的重试逻辑
+        // 如果设置了最小长度，则在外层再做一次长度检查
         if (minLength > 0) {
             for (let i = 0; i < maxRetries; i++) {
                 $toast.find('.toastr-message').text(`正在规划剧情... (尝试 ${i + 1}/${maxRetries})`);
                 const tempMessage = await callInterceptionApi(userMessage, slicedContext, finalApiSettings, worldbookContent, tableDataContent, settings);
-                if (tempMessage && tempMessage.length >= minLength) {
+                
+                // [关键修改] callInterceptionApi 现在在失败时返回 null
+                if (!tempMessage) {
+                    // API调用失败（包括关键词验证失败），不再继续
+                    if ($toast) toastr.clear($toast);
+                    toastr.error('AI回复验证失败，操作已取消。', '规划失败');
+                    return null;
+                }
+                
+                if (tempMessage.length >= minLength) {
                     processedMessage = tempMessage;
                     if ($toast) toastr.clear($toast);
                     toastr.success(`剧情规划成功 (第 ${i + 1} 次尝试)。`, '成功');
@@ -252,8 +267,23 @@ async function runOptimizationLogic(userMessage) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
+            
+            // [关键修改] 如果所有尝试都因长度不足而失败，返回 null
+            if (!processedMessage) {
+                if ($toast) toastr.clear($toast);
+                toastr.error(`重试 ${maxRetries} 次后回复依然过短，操作已取消。`, '规划失败');
+                return null;
+            }
         } else {
+            // 不检查长度，直接调用一次
             processedMessage = await callInterceptionApi(userMessage, slicedContext, finalApiSettings, worldbookContent, tableDataContent, settings);
+            
+            // [关键修改] 如果 API 调用失败，返回 null
+            if (!processedMessage) {
+                if ($toast) toastr.clear($toast);
+                toastr.error('AI回复验证失败，操作已取消。', '规划失败');
+                return null;
+            }
         }
 
         if (processedMessage) {
@@ -268,10 +298,8 @@ async function runOptimizationLogic(userMessage) {
             }
             return finalMessage;
         } else {
+            // [关键修改] 所有重试都失败，返回 null
             if ($toast) toastr.clear($toast);
-            if (minLength > 0) {
-                toastr.error(`重试 ${maxRetries} 次后回复依然过短，操作已取消。`, '规划失败');
-            }
             return null;
         }
 

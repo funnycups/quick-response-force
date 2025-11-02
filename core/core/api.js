@@ -90,206 +90,287 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
         return null;
     }
 
-    const replacePlaceholders = (text) => {
-        if (typeof text !== 'string') return '';
-        // 替换 $1 为世界书内容
-        if (apiSettings.worldbookEnabled) {
-            const worldbookReplacement = worldbookContent ? `\n<worldbook_context>\n${worldbookContent}\n</worldbook_context>\n` : '';
-            text = text.replace(/(?<!\\)\$1/g, worldbookReplacement);
-        }
-        // [新增] 替换 $5 为表格数据内容
-        const tableDataReplacement = tableDataContent ? `\n<table_data_context>\n${tableDataContent}\n</table_data_context>\n` : '';
-        text = text.replace(/(?<!\\)\$5/g, tableDataReplacement);
-        
-        return text;
-    };
+    // [新功能] 获取关键词验证配置
+    const requiredKeywords = apiSettings.requiredKeywords
+        ? apiSettings.requiredKeywords.split(',').map(kw => kw.trim()).filter(kw => kw.length > 0)
+        : [];
+    const maxRetries = apiSettings.maxRetries || 3;
 
-    // 构建核心提示词消息数组
-    const corePromptMessages = [];
-    
-    if (apiSettings.mainPrompt) {
-        corePromptMessages.push({ role: 'system', content: replacePlaceholders(apiSettings.mainPrompt) });
-    }
+    /**
+     * [新功能] 验证响应是否包含所有必需的关键词
+     * @param {string} content - API返回的内容
+     * @returns {boolean} - 是否包含所有关键词
+     */
+    const validateKeywords = (content) => {
+        if (requiredKeywords.length === 0) return true;
 
-    const fullHistory = Array.isArray(contextMessages) ? [...contextMessages] : [];
-    if (userMessage) {
-        fullHistory.push({ role: 'user', content: userMessage });
-    }
-
-    const sanitizeHtml = (htmlString) => {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = htmlString;
-        return tempDiv.textContent || tempDiv.innerText || '';
-    };
-
-    const formattedHistory = fullHistory.map(msg => `${msg.role}："${sanitizeHtml(msg.content)}"`).join(' \n ');
-    if (formattedHistory) {
-        corePromptMessages.push({ role: 'system', content: `以下是前文的用户记录和故事发展，给你用作参考：\n ${formattedHistory}` });
-    }
-
-    if (apiSettings.systemPrompt) {
-        corePromptMessages.push({ role: 'user', content: replacePlaceholders(apiSettings.systemPrompt) });
-    }
-
-    // 处理 jailbreak 提示词
-    const jailbreakPrompts = globalSettings?.jailbreakPrompts || [];
-    const messages = [];
-    
-    // 用于标记是否已插入核心提示词
-    let corePromptsInserted = false;
-    
-    if (jailbreakPrompts.length > 0) {
-        // 遍历 jailbreak 提示词数组
-        for (const jbPrompt of jailbreakPrompts) {
-            if (jbPrompt.content === '$CORE_PROMPTS') {
-                // 插入核心提示词
-                messages.push(...corePromptMessages);
-                corePromptsInserted = true;
-            } else {
-                // 插入 jailbreak 提示词
-                messages.push({
-                    role: jbPrompt.role || 'system',
-                    content: jbPrompt.content || ''
-                });
+        for (const keyword of requiredKeywords) {
+            if (!content.includes(keyword)) {
+                console.warn(`[${extensionName}] 回复缺少必需关键词: "${keyword}"`);
+                return false;
             }
         }
-        
-        // 如果用户没有在 jailbreak 中包含 $CORE_PROMPTS，则追加到末尾
-        if (!corePromptsInserted) {
+        return true;
+    };
+
+    /**
+     * [新功能] 核心API调用函数（可重试）
+     * @returns {Promise<string|null>}
+     */
+    const makeApiCall = async () => {
+        const replacePlaceholders = (text) => {
+            if (typeof text !== 'string') return '';
+            // 替换 $1 为世界书内容
+            if (apiSettings.worldbookEnabled) {
+                const worldbookReplacement = worldbookContent ? `\n<worldbook_context>\n${worldbookContent}\n</worldbook_context>\n` : '';
+                text = text.replace(/(?<!\\)\$1/g, worldbookReplacement);
+            }
+            // [新增] 替换 $5 为表格数据内容
+            const tableDataReplacement = tableDataContent ? `\n<table_data_context>\n${tableDataContent}\n</table_data_context>\n` : '';
+            text = text.replace(/(?<!\\)\$5/g, tableDataReplacement);
+
+            return text;
+        };
+
+        // 构建核心提示词消息数组
+        const corePromptMessages = [];
+
+        if (apiSettings.mainPrompt) {
+            corePromptMessages.push({ role: 'system', content: replacePlaceholders(apiSettings.mainPrompt) });
+        }
+
+        const fullHistory = Array.isArray(contextMessages) ? [...contextMessages] : [];
+        if (userMessage) {
+            fullHistory.push({ role: 'user', content: userMessage });
+        }
+
+        const sanitizeHtml = (htmlString) => {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlString;
+            return tempDiv.textContent || tempDiv.innerText || '';
+        };
+
+        const formattedHistory = fullHistory.map(msg => `${msg.role}："${sanitizeHtml(msg.content)}"`).join(' \n ');
+        if (formattedHistory) {
+            corePromptMessages.push({ role: 'system', content: `以下是前文的用户记录和故事发展，给你用作参考：\n ${formattedHistory}` });
+        }
+
+        if (apiSettings.systemPrompt) {
+            corePromptMessages.push({ role: 'user', content: replacePlaceholders(apiSettings.systemPrompt) });
+        }
+
+        // 处理 jailbreak 提示词
+        const jailbreakPrompts = globalSettings?.jailbreakPrompts || [];
+        const messages = [];
+
+        // 用于标记是否已插入核心提示词
+        let corePromptsInserted = false;
+
+        if (jailbreakPrompts.length > 0) {
+            // 遍历 jailbreak 提示词数组
+            for (const jbPrompt of jailbreakPrompts) {
+                if (jbPrompt.content === '$CORE_PROMPTS') {
+                    // 插入核心提示词
+                    messages.push(...corePromptMessages);
+                    corePromptsInserted = true;
+                } else {
+                    // 插入 jailbreak 提示词
+                    messages.push({
+                        role: jbPrompt.role || 'system',
+                        content: jbPrompt.content || ''
+                    });
+                }
+            }
+
+            // 如果用户没有在 jailbreak 中包含 $CORE_PROMPTS，则追加到末尾
+            if (!corePromptsInserted) {
+                messages.push(...corePromptMessages);
+            }
+        } else {
+            // 如果没有配置 jailbreak 提示词，直接使用核心提示词
             messages.push(...corePromptMessages);
         }
-    } else {
-        // 如果没有配置 jailbreak 提示词，直接使用核心提示词
-        messages.push(...corePromptMessages);
-    }
-    
-    let result;
-    // [新增] 酒馆连接预设模式
-    if (apiSettings.apiMode === 'tavern') {
-        const profileId = apiSettings.tavernProfile;
-        if (!profileId) {
-            toastr.error('未选择酒馆连接预设。', '配置错误');
+
+        let result;
+        // [新增] 酒馆连接预设模式
+        if (apiSettings.apiMode === 'tavern') {
+            const profileId = apiSettings.tavernProfile;
+            if (!profileId) {
+                toastr.error('未选择酒馆连接预设。', '配置错误');
+                return null;
+            }
+
+            let originalProfile = '';
+            let responsePromise;
+            try {
+                // 方案：发送前切换，发送后立即切换回来
+                originalProfile = await window.TavernHelper.triggerSlash('/profile');
+
+                const context = getContext();
+                const targetProfile = context.extensionSettings?.connectionManager?.profiles.find(p => p.id === profileId);
+
+                if (!targetProfile) {
+                    throw new Error(`无法找到ID为 "${profileId}" 的连接预设。`);
+                }
+                if (!targetProfile.api) {
+                    throw new Error(`预设 "${targetProfile.name || targetProfile.id}" 没有配置API。`);
+                }
+                if (!targetProfile.preset) {
+                    throw new Error(`预设 "${targetProfile.name || targetProfile.id}" 没有选择预设。`);
+                }
+
+                const targetProfileName = targetProfile.name;
+                const currentProfile = await window.TavernHelper.triggerSlash('/profile');
+
+                if (currentProfile !== targetProfileName) {
+                    const escapedProfileName = targetProfileName.replace(/"/g, '\\"');
+                    await window.TavernHelper.triggerSlash(`/profile await=true "${escapedProfileName}"`);
+                }
+
+                console.log(`[${extensionName}] 通过酒馆连接预设 "${targetProfile.name || targetProfile.id}" 发送请求...`);
+                // [核心增强] 构造一个包含UI参数的选项对象，以覆盖酒馆预设
+                const overrideOptions = {
+                    max_tokens: apiSettings.max_tokens,
+                    temperature: apiSettings.temperature,
+                    top_p: apiSettings.top_p,
+                    presence_penalty: apiSettings.presence_penalty,
+                    frequency_penalty: apiSettings.frequency_penalty,
+                };
+
+                // [关键修改] 发起请求但不等待其完成
+                // [重构] 不再传递覆盖参数，以完全使用酒馆预设中的设置
+                responsePromise = context.ConnectionManagerRequestService.sendRequest(
+                    targetProfile.id,
+                    messages
+                );
+
+            } catch (error) {
+                console.error(`[${extensionName}] 通过酒馆连接预设调用API时出错:`, error);
+                toastr.error(`API请求失败 (酒馆预设): ${error.message}`, 'API错误');
+                responsePromise = Promise.resolve(null); // 确保 responsePromise 有一个值
+            } finally {
+                // [关键修改] 无论请求成功或失败，都立即尝试恢复原始预设
+                const currentProfileAfterCall = await window.TavernHelper.triggerSlash('/profile');
+                if (originalProfile && originalProfile !== currentProfileAfterCall) {
+                    const escapedOriginalProfile = originalProfile.replace(/"/g, '\\"');
+                    await window.TavernHelper.triggerSlash(`/profile await=true "${escapedOriginalProfile}"`);
+                    console.log(`[${extensionName}] 已恢复原酒馆连接预设: "${originalProfile}"`);
+                }
+            }
+
+            // [关键修改] 在恢复预设之后，再等待API响应
+            result = await responsePromise;
+        }
+        else if (apiSettings.apiMode === 'perfect') {
+            const profileId = apiSettings.tavernProfile;
+            if (!profileId) {
+                toastr.error('未选择酒馆连接预设。', '配置错误');
+                return null;
+            }
+            const context = getContext();
+            console.log(`[${extensionName}] 通过完美模式发送请求...`);
+            result = await context.ConnectionManagerRequestService.sendRequest(
+                profileId,
+                messages,
+                apiSettings.max_tokens,
+            );
+        }
+        else if (apiSettings.apiMode === 'backend') {
+            result = await callApiViaBackend(apiSettings, messages);
+        }
+        // 前端直连模式 (包括OpenAI和Google)
+        else {
+            const { apiUrl, apiKey, model } = apiSettings;
+            let finalApiUrl;
+            let body;
+            let headers = { 'Content-Type': 'application/json' };
+            let responseParser = normalizeApiResponse;
+
+            if (apiSettings.apiMode === 'google') {
+                const apiVersion = 'v1beta';
+                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
+                body = JSON.stringify(buildGoogleRequest(messages, apiSettings));
+                responseParser = (resp) => normalizeApiResponse(parseGoogleResponse(resp));
+            } else { // 'frontend' mode
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                finalApiUrl = apiUrl.replace(/\/$/, '');
+                if (!finalApiUrl.endsWith('/chat/completions')) {
+                    finalApiUrl += '/chat/completions';
+                }
+                body = JSON.stringify({
+                    messages,
+                    model,
+                    max_tokens: apiSettings.max_tokens,
+                    temperature: apiSettings.temperature,
+                    top_p: apiSettings.top_p,
+                    presence_penalty: apiSettings.presence_penalty,
+                    frequency_penalty: apiSettings.frequency_penalty,
+                    stream: false,
+                });
+            }
+
+            console.log(`[${extensionName}] 准备通过前端直连发送请求至 ${finalApiUrl}:`, body);
+
+            try {
+                const response = await fetch(finalApiUrl, { method: 'POST', headers, body });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - ${errorText}`);
+                }
+                const jsonResponse = await response.json();
+                result = responseParser(jsonResponse);
+            } catch (error) {
+                console.error(`[${extensionName}] 通过前端直连调用API时出错:`, error);
+                toastr.error('前端直连API请求失败，请检查CORS设置及控制台日志。', 'API错误');
+                result = null;
+            }
+        }
+
+        if (result && result.content) {
+            return result.content;
+        }
+
+        return null;
+    };
+
+    // [新功能] 实现重试逻辑
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        console.log(`[${extensionName}] API调用尝试 ${attempt}/${maxRetries}...`);
+
+        const content = await makeApiCall();
+
+        if (!content) {
+            console.warn(`[${extensionName}] 第 ${attempt} 次尝试：API未返回有效内容`);
+            if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+                continue;
+            }
+            break;
+        }
+
+        // [新功能] 验证关键词
+        if (!validateKeywords(content)) {
+            console.warn(`[${extensionName}] 第 ${attempt} 次尝试：回复缺少必需关键词`);
+            if (attempt < maxRetries) {
+                toastr.warning(`回复缺少必需关键词，正在重试 (${attempt}/${maxRetries})...`, extensionName);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+                continue;
+            }
+            // 最后一次尝试仍然失败
+            toastr.error(`重试 ${maxRetries} 次后，AI回复仍缺少必需关键词。`, 'API错误');
             return null;
         }
 
-        let originalProfile = '';
-        let responsePromise;
-        try {
-            // 方案：发送前切换，发送后立即切换回来
-            originalProfile = await window.TavernHelper.triggerSlash('/profile');
-
-            const context = getContext();
-            const targetProfile = context.extensionSettings?.connectionManager?.profiles.find(p => p.id === profileId);
-
-            if (!targetProfile) {
-                throw new Error(`无法找到ID为 "${profileId}" 的连接预设。`);
-            }
-            if (!targetProfile.api) {
-                throw new Error(`预设 "${targetProfile.name || targetProfile.id}" 没有配置API。`);
-            }
-            if (!targetProfile.preset) {
-                throw new Error(`预设 "${targetProfile.name || targetProfile.id}" 没有选择预设。`);
-            }
-
-            const targetProfileName = targetProfile.name;
-            const currentProfile = await window.TavernHelper.triggerSlash('/profile');
-
-            if (currentProfile !== targetProfileName) {
-                const escapedProfileName = targetProfileName.replace(/"/g, '\\"');
-                await window.TavernHelper.triggerSlash(`/profile await=true "${escapedProfileName}"`);
-            }
-
-            console.log(`[${extensionName}] 通过酒馆连接预设 "${targetProfile.name || targetProfile.id}" 发送请求...`);
-            // [核心增强] 构造一个包含UI参数的选项对象，以覆盖酒馆预设
-            const overrideOptions = {
-                max_tokens: apiSettings.max_tokens,
-                temperature: apiSettings.temperature,
-                top_p: apiSettings.top_p,
-                presence_penalty: apiSettings.presence_penalty,
-                frequency_penalty: apiSettings.frequency_penalty,
-            };
-
-            // [关键修改] 发起请求但不等待其完成
-            responsePromise = context.ConnectionManagerRequestService.sendRequest(
-                targetProfile.id,
-                messages,
-                overrideOptions
-            );
-
-        } catch (error) {
-            console.error(`[${extensionName}] 通过酒馆连接预设调用API时出错:`, error);
-            toastr.error(`API请求失败 (酒馆预设): ${error.message}`, 'API错误');
-            responsePromise = Promise.resolve(null); // 确保 responsePromise 有一个值
-        } finally {
-            // [关键修改] 无论请求成功或失败，都立即尝试恢复原始预设
-            const currentProfileAfterCall = await window.TavernHelper.triggerSlash('/profile');
-            if (originalProfile && originalProfile !== currentProfileAfterCall) {
-                const escapedOriginalProfile = originalProfile.replace(/"/g, '\\"');
-                await window.TavernHelper.triggerSlash(`/profile await=true "${escapedOriginalProfile}"`);
-                console.log(`[${extensionName}] 已恢复原酒馆连接预设: "${originalProfile}"`);
-            }
+        // 成功返回
+        if (attempt > 1) {
+            toastr.success(`第 ${attempt} 次尝试成功！`, extensionName);
         }
-        
-        // [关键修改] 在恢复预设之后，再等待API响应
-        result = await responsePromise;
-    }
-    else if (apiSettings.apiMode === 'backend') {
-        result = await callApiViaBackend(apiSettings, messages);
-    } 
-    // 前端直连模式 (包括OpenAI和Google)
-    else {
-        const { apiUrl, apiKey, model } = apiSettings;
-        let finalApiUrl;
-        let body;
-        let headers = { 'Content-Type': 'application/json' };
-        let responseParser = normalizeApiResponse;
-
-        if (apiSettings.apiMode === 'google') {
-            const apiVersion = 'v1beta';
-            finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
-            body = JSON.stringify(buildGoogleRequest(messages, apiSettings));
-            responseParser = (resp) => normalizeApiResponse(parseGoogleResponse(resp));
-        } else { // 'frontend' mode
-            headers['Authorization'] = `Bearer ${apiKey}`;
-            finalApiUrl = apiUrl.replace(/\/$/, '');
-            if (!finalApiUrl.endsWith('/chat/completions')) {
-                finalApiUrl += '/chat/completions';
-            }
-            body = JSON.stringify({
-                messages,
-                model,
-                max_tokens: apiSettings.max_tokens,
-                temperature: apiSettings.temperature,
-                top_p: apiSettings.top_p,
-                presence_penalty: apiSettings.presence_penalty,
-                frequency_penalty: apiSettings.frequency_penalty,
-                stream: false,
-            });
-        }
-
-        console.log(`[${extensionName}] 准备通过前端直连发送请求至 ${finalApiUrl}:`, body);
-
-        try {
-            const response = await fetch(finalApiUrl, { method: 'POST', headers, body });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - ${errorText}`);
-            }
-            const jsonResponse = await response.json();
-            result = responseParser(jsonResponse);
-        } catch (error) {
-            console.error(`[${extensionName}] 通过前端直连调用API时出错:`, error);
-            toastr.error('前端直连API请求失败，请检查CORS设置及控制台日志。', 'API错误');
-            result = null;
-        }
+        return content;
     }
 
-    if (result && result.content) {
-        return result.content;
-    }
-    
-    console.error(`[${extensionName}] API调用未返回有效内容或出错:`, result);
-    toastr.error('API调用失败，未能获取有效回复。请检查控制台。', '错误');
+    // 所有尝试都失败
+    console.error(`[${extensionName}] API调用在 ${maxRetries} 次尝试后失败`);
+    toastr.error(`API调用失败，已重试 ${maxRetries} 次。`, 'API错误');
     return null;
 }
 

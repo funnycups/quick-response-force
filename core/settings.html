@@ -31,6 +31,16 @@
             <input id="qrf_context_turn_count" type="number" class="text_pole" min="0" max="20" step="1" value="1" />
             <small class="notes">设定在每次请求时，从聊天记录末尾提取的AI回复数量作为历史上下文。设置为0则不包含任何历史记录。</small>
         </div>
+        <div class="qrf_settings_block">
+            <label for="qrf_required_keywords">必须包含的关键词</label>
+            <input id="qrf_required_keywords" type="text" class="text_pole" placeholder="例如: <plot>,编码索引" />
+            <small class="notes">AI回复中必须包含的关键词，多个关键词用逗号分隔。如果回复不包含所有关键词，将自动重试。留空则不检查关键词。</small>
+        </div>
+        <div class="qrf_settings_block">
+            <label for="qrf_max_retries">最大重试次数</label>
+            <input id="qrf_max_retries" type="number" class="text_pole" min="1" max="10" step="1" value="3" />
+            <small class="notes">当AI回复不符合要求时（长度不足或缺少关键词），最多重试的次数。默认为3次。</small>
+        </div>
     </fieldset>
 
     <fieldset class="settings-group">

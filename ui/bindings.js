@@ -632,7 +632,9 @@ function saveAsNewPreset(panel) {
         excludeTags: panel.find('#qrf_exclude_tags').val(),
         extractTags: panel.find('#qrf_extract_tags').val(),
         minLength: parseInt(panel.find('#qrf_min_length').val(), 10),
-        contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10)
+        contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10),
+        requiredKeywords: panel.find('#qrf_required_keywords').val(),
+        maxRetries: parseInt(panel.find('#qrf_max_retries').val(), 10)
     };
 
     if (existingPresetIndex !== -1) {
@@ -696,7 +698,9 @@ function overwriteSelectedPreset(panel) {
         excludeTags: panel.find('#qrf_exclude_tags').val(),
         extractTags: panel.find('#qrf_extract_tags').val(),
         minLength: parseInt(panel.find('#qrf_min_length').val(), 10),
-        contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10)
+        contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10),
+        requiredKeywords: panel.find('#qrf_required_keywords').val(),
+        maxRetries: parseInt(panel.find('#qrf_max_retries').val(), 10)
     };
 
     presets[existingPresetIndex] = updatedPresetData;
@@ -813,7 +817,9 @@ function importPromptPresets(file, panel) {
                         excludeTags: preset.excludeTags || '',
                         extractTags: preset.extractTags || '',
                         minLength: preset.minLength ?? defaultSettings.minLength,
-                        contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount
+                        contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount,
+                        requiredKeywords: preset.requiredKeywords || '',
+                        maxRetries: preset.maxRetries ?? 3
                     };
 
                     const existingIndex = currentPresets.findIndex(p => p.name === preset.name);
@@ -979,6 +985,10 @@ function loadSettings(panel) {
     panel.find('#qrf_frequency_penalty').val(apiSettings.frequencyPenalty);
     panel.find('#qrf_context_turn_count').val(apiSettings.contextTurnCount);
     panel.find('#qrf_worldbook_char_limit').val(apiSettings.worldbookCharLimit);
+
+    // [新增] 加载关键词和重试次数设置
+    panel.find('#qrf_required_keywords').val(apiSettings.requiredKeywords || '');
+    panel.find('#qrf_max_retries').val(apiSettings.maxRetries || 3);
 
     // 加载标签排除和摘取设置
     panel.find('#qrf_exclude_tags').val(apiSettings.excludeTags || '');
@@ -1233,7 +1243,9 @@ export function initializeBindings() {
                 excludeTags: selectedPreset.excludeTags || '',
                 extractTags: selectedPreset.extractTags || '',
                 minLength: selectedPreset.minLength ?? defaultSettings.minLength,
-                contextTurnCount: selectedPreset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount
+                contextTurnCount: selectedPreset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount,
+                requiredKeywords: selectedPreset.requiredKeywords || '',
+                maxRetries: selectedPreset.maxRetries ?? 3
             };
 
             // 1. 更新UI界面
@@ -1248,6 +1260,8 @@ export function initializeBindings() {
             panel.find('#qrf_extract_tags').val(presetData.extractTags);
             panel.find('#qrf_min_length').val(presetData.minLength);
             panel.find('#qrf_context_turn_count').val(presetData.contextTurnCount);
+            panel.find('#qrf_required_keywords').val(presetData.requiredKeywords);
+            panel.find('#qrf_max_retries').val(presetData.maxRetries);
 
             // 2. 直接、同步地覆盖apiSettings中的内容
             // saveSetting现在是异步的，我们需要等待它完成
