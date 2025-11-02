@@ -609,12 +609,6 @@ async function saveDisabledEntries() {
         }
     });
 
-    // 清理空数组，保持数据整洁
-    Object.keys(disabledEntries).forEach(bookName => {
-        if (disabledEntries[bookName].length === 0) {
-            delete disabledEntries[bookName];
-        }
-    });
 
     console.log(`[${extensionName}] 保存禁用的世界书条目:`, disabledEntries);
     console.log(`[${extensionName}] 当前可见的世界书:`, Array.from(currentVisibleBooks));
