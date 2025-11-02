@@ -4,6 +4,7 @@
 import { extension_settings, getContext } from '/scripts/extensions.js';
 import { extractContentByTag, replaceContentByTag, extractFullTagBlock } from '../utils/tagProcessor.js';
 import { isGoogleEndpoint, convertToGoogleRequest, parseGoogleResponse, buildGoogleApiUrl } from '../utils/googleAdapter.js';
+import { fetchWithStreamAndTimeout } from './api.js';
 
 const extensionName = 'quick-response-force';
 
@@ -73,7 +74,7 @@ export async function checkAndFixWithAPI(latestAiMessage, contextMessages) {
         console.dir(messages);
         console.groupEnd();
 
-        // 调用API
+        // 调用API（使用流式传输）
         const isGoogle = isGoogleEndpoint(settings.apiUrl);
         const apiKey = settings.apiKey?.trim();
         const model = settings.model;
@@ -82,34 +83,37 @@ export async function checkAndFixWithAPI(latestAiMessage, contextMessages) {
         
         let finalUrl;
         if (isGoogle) {
-            finalUrl = buildGoogleApiUrl(settings.apiUrl, model);
+            // Google API流式端点
+            const apiVersion = 'v1beta';
+            const baseUrl = settings.apiUrl.trim().replace(/\/$/, '');
+            finalUrl = `${baseUrl}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse`;
+            if (settings.apiUrl.includes('aiplatform.googleapis.com')) {
+                finalUrl += `&access_token=${apiKey}`;
+            } else {
+                finalUrl += `&key=${apiKey}`;
+            }
         } else {
             let path = settings.apiUrl.trim().replace(/\/v1\/$/, '').replace(/\/$/, '');
             finalUrl = `${path}/v1/chat/completions`;
         }
         
         const headers = { 'Content-Type': 'application/json' };
-        if(isGoogle) {
-            headers[settings.apiUrl.includes('aiplatform.googleapis.com') ? 'Authorization' : 'X-goog-api-key'] = isGoogle && settings.apiUrl.includes('aiplatform.googleapis.com') ? `Bearer ${apiKey}` : apiKey;
-        } else {
+        if (isGoogle && settings.apiUrl.includes('aiplatform.googleapis.com')) {
+            headers['Authorization'] = `Bearer ${apiKey}`;
+        } else if (!isGoogle) {
             headers['Authorization'] = `Bearer ${apiKey}`;
         }
 
         const body = JSON.stringify(isGoogle
             ? convertToGoogleRequest({ model, messages, max_tokens: maxTokens, temperature })
-            : { model, messages, max_tokens: maxTokens, temperature, stream: false }
+            : { model, messages, max_tokens: maxTokens, temperature, stream: true }
         );
 
-        const response = await fetch(finalUrl, { method: 'POST', headers, body });
-        if (!response.ok) {
-            throw new Error(`API请求失败: ${response.status} ${response.statusText}\n${await response.text()}`);
-        }
-        
-        const data = await response.json();
-        const apiResponse = isGoogle ? parseGoogleResponse(data)?.choices?.[0]?.message?.content : data?.choices?.[0]?.message?.content;
+        console.log(`[${extensionName}] 发起流式优化请求...`);
+        const apiResponse = await fetchWithStreamAndTimeout(finalUrl, { method: 'POST', headers, body }, isGoogle);
 
         if (!apiResponse) {
-            console.error(`[${extensionName}] 未能从API响应中提取有效内容。`, data);
+            console.error(`[${extensionName}] 未能从API响应中提取有效内容。`);
             throw new Error('AI响应为空或格式不正确。');
         }
 

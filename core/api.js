@@ -7,6 +7,140 @@ import { buildGoogleRequest, parseGoogleResponse } from '../utils/googleAdapter.
 const extensionName = 'quick-response-force';
 
 /**
+ * 流式请求处理函数，支持25秒chunk超时检测
+ * @param {string} url - 请求URL
+ * @param {object} options - fetch选项
+ * @param {boolean} isGoogleApi - 是否为Google API
+ * @returns {Promise<string>} 完整的响应内容
+ */
+async function fetchWithStreamAndTimeout(url, options, isGoogleApi = false) {
+    const CHUNK_TIMEOUT = 25000; // 25秒chunk超时
+    let lastChunkTime = Date.now();
+    let timeoutId;
+    let accumulatedContent = '';
+    
+    // 启用流式传输
+    const streamOptions = {
+        ...options,
+        body: options.body ? JSON.parse(options.body) : undefined
+    };
+    
+    if (streamOptions.body) {
+        streamOptions.body.stream = true;
+        streamOptions.body = JSON.stringify(streamOptions.body);
+    }
+    
+    console.log(`[${extensionName}] 发起流式请求至: ${url}`);
+    
+    const response = await fetch(url, streamOptions);
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    try {
+        let buffer = '';
+        
+        const checkTimeout = () => {
+            const now = Date.now();
+            if (now - lastChunkTime > CHUNK_TIMEOUT) {
+                reader.cancel();
+                throw new Error(`流式传输超时：${CHUNK_TIMEOUT/1000}秒内未收到新数据块`);
+            }
+        };
+        
+        // 启动超时检测
+        timeoutId = setInterval(checkTimeout, 1000);
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+                console.log(`[${extensionName}] 流式传输完成`);
+                break;
+            }
+            
+            // 更新最后接收chunk的时间
+            lastChunkTime = Date.now();
+            
+            // 解码chunk
+            buffer += decoder.decode(value, { stream: true });
+            
+            // 处理SSE格式的数据
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // 保留不完整的行
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = line.slice(6).trim();
+                    
+                    if (data === '[DONE]') {
+                        continue;
+                    }
+                    
+                    try {
+                        const parsed = JSON.parse(data);
+                        
+                        if (isGoogleApi) {
+                            // Google API格式
+                            const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+                            if (content) {
+                                accumulatedContent += content;
+                            }
+                        } else {
+                            // OpenAI格式
+                            const content = parsed.choices?.[0]?.delta?.content;
+                            if (content) {
+                                accumulatedContent += content;
+                            }
+                        }
+                    } catch (e) {
+                        // 忽略无法解析的行
+                        console.debug(`[${extensionName}] 跳过无法解析的数据行:`, data);
+                    }
+                }
+            }
+        }
+        
+        if (!accumulatedContent) {
+            throw new Error('流式传输未返回任何内容');
+        }
+        
+        console.log(`[${extensionName}] 累积内容长度: ${accumulatedContent.length} 字符`);
+        return accumulatedContent.trim();
+        
+    } finally {
+        if (timeoutId) {
+            clearInterval(timeoutId);
+        }
+        reader.releaseLock();
+    }
+}
+
+/**
+ * 为Promise添加超时控制
+ * @param {Promise} promise - 要包装的Promise
+ * @param {number} timeoutMs - 超时时间（毫秒）
+ * @param {string} errorMessage - 超时错误消息
+ * @returns {Promise}
+ */
+function withTimeout(promise, timeoutMs, errorMessage = '请求超时') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+        )
+    ]);
+}
+
+// 导出流式处理函数供其他模块使用
+export { fetchWithStreamAndTimeout };
+
+/**
  * 统一处理和规范化API响应数据。
  * @param {*} responseData - 从API收到的原始响应数据
  * @returns {object} 规范化后的数据对象
@@ -42,7 +176,7 @@ function normalizeApiResponse(responseData) {
 }
 
 /**
- * 通过SillyTavern后端代理发送聊天请求
+ * 通过SillyTavern后端代理发送聊天请求（带超时控制）
  * @param {object} apiSettings - API设置
  * @param {Array} messages - 发送给API的消息数组
  * @returns {Promise<object|null>}
@@ -62,20 +196,33 @@ async function callApiViaBackend(apiSettings, messages) {
         api_key: apiSettings.apiKey,
     };
 
-    console.log(`[${extensionName}] 准备通过SillyTavern后端代理发送请求:`, JSON.stringify(request, null, 2));
+    console.log(`[${extensionName}] 准备通过SillyTavern后端代理发送请求（带超时控制）`);
 
     try {
-        const result = await $.ajax({
+        const ajaxPromise = $.ajax({
             url: '/api/backends/chat-completions/generate',
             type: 'POST',
             contentType: 'application/json',
             headers: { 'Authorization': `Bearer ${apiSettings.apiKey}` },
             data: JSON.stringify(request),
         });
+        
+        // 添加60秒总超时（后端代理模式允许更长时间）
+        const result = await withTimeout(
+            ajaxPromise,
+            60000,
+            '后端代理请求超时（60秒）'
+        );
+        
         return normalizeApiResponse(result);
     } catch (error) {
         console.error(`[${extensionName}] 通过SillyTavern代理调用API时出错:`, error);
-        toastr.error('API请求失败 (后端代理)，请检查控制台日志。', 'API错误');
+        
+        if (error.message.includes('超时')) {
+            toastr.error(`后端代理API请求超时: ${error.message}`, 'API超时');
+        } else {
+            toastr.error('API请求失败 (后端代理)，请检查控制台日志。', 'API错误');
+        }
         return null;
     }
 }
@@ -192,7 +339,7 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
         }
 
         let result;
-        // [新增] 酒馆连接预设模式
+        // [新增] 酒馆连接预设模式（带超时控制）
         if (apiSettings.apiMode === 'tavern') {
             const profileId = apiSettings.tavernProfile;
             if (!profileId) {
@@ -227,29 +374,31 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                     await window.TavernHelper.triggerSlash(`/profile await=true "${escapedProfileName}"`);
                 }
 
-                console.log(`[${extensionName}] 通过酒馆连接预设 "${targetProfile.name || targetProfile.id}" 发送请求...`);
-                // [核心增强] 构造一个包含UI参数的选项对象，以覆盖酒馆预设
-                const overrideOptions = {
-                    max_tokens: apiSettings.max_tokens,
-                    temperature: apiSettings.temperature,
-                    top_p: apiSettings.top_p,
-                    presence_penalty: apiSettings.presence_penalty,
-                    frequency_penalty: apiSettings.frequency_penalty,
-                };
+                console.log(`[${extensionName}] 通过酒馆连接预设 "${targetProfile.name || targetProfile.id}" 发送请求（带超时控制）...`);
 
-                // [关键修改] 发起请求但不等待其完成
-                // [重构] 不再传递覆盖参数，以完全使用酒馆预设中的设置
-                responsePromise = context.ConnectionManagerRequestService.sendRequest(
+                // 发起请求并添加60秒超时
+                const requestPromise = context.ConnectionManagerRequestService.sendRequest(
                     targetProfile.id,
                     messages
+                );
+                
+                responsePromise = withTimeout(
+                    requestPromise,
+                    60000,
+                    '酒馆连接请求超时（60秒）'
                 );
 
             } catch (error) {
                 console.error(`[${extensionName}] 通过酒馆连接预设调用API时出错:`, error);
-                toastr.error(`API请求失败 (酒馆预设): ${error.message}`, 'API错误');
-                responsePromise = Promise.resolve(null); // 确保 responsePromise 有一个值
+                
+                if (error.message.includes('超时')) {
+                    toastr.error(`酒馆连接API请求超时: ${error.message}`, 'API超时');
+                } else {
+                    toastr.error(`API请求失败 (酒馆预设): ${error.message}`, 'API错误');
+                }
+                responsePromise = Promise.resolve(null);
             } finally {
-                // [关键修改] 无论请求成功或失败，都立即尝试恢复原始预设
+                // 无论请求成功或失败，都立即尝试恢复原始预设
                 const currentProfileAfterCall = await window.TavernHelper.triggerSlash('/profile');
                 if (originalProfile && originalProfile !== currentProfileAfterCall) {
                     const escapedOriginalProfile = originalProfile.replace(/"/g, '\\"');
@@ -258,7 +407,7 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                 }
             }
 
-            // [关键修改] 在恢复预设之后，再等待API响应
+            // 在恢复预设之后，再等待API响应
             result = await responsePromise;
         }
         else if (apiSettings.apiMode === 'perfect') {
@@ -268,12 +417,31 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                 return null;
             }
             const context = getContext();
-            console.log(`[${extensionName}] 通过完美模式发送请求...`);
-            result = await context.ConnectionManagerRequestService.sendRequest(
-                profileId,
-                messages,
-                apiSettings.max_tokens,
-            );
+            console.log(`[${extensionName}] 通过完美模式发送请求（带超时控制）...`);
+            
+            try {
+                const requestPromise = context.ConnectionManagerRequestService.sendRequest(
+                    profileId,
+                    messages,
+                    apiSettings.max_tokens,
+                );
+                
+                // 添加60秒超时
+                result = await withTimeout(
+                    requestPromise,
+                    60000,
+                    '完美模式请求超时（60秒）'
+                );
+            } catch (error) {
+                console.error(`[${extensionName}] 完美模式调用失败:`, error);
+                
+                if (error.message.includes('超时')) {
+                    toastr.error(`完美模式API请求超时: ${error.message}`, 'API超时');
+                } else {
+                    toastr.error(`完美模式API请求失败: ${error.message}`, 'API错误');
+                }
+                result = null;
+            }
         }
         else if (apiSettings.apiMode === 'backend') {
             result = await callApiViaBackend(apiSettings, messages);
@@ -284,13 +452,12 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
             let finalApiUrl;
             let body;
             let headers = { 'Content-Type': 'application/json' };
-            let responseParser = normalizeApiResponse;
+            const isGoogleMode = apiSettings.apiMode === 'google';
 
-            if (apiSettings.apiMode === 'google') {
+            if (isGoogleMode) {
                 const apiVersion = 'v1beta';
-                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
+                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
                 body = JSON.stringify(buildGoogleRequest(messages, apiSettings));
-                responseParser = (resp) => normalizeApiResponse(parseGoogleResponse(resp));
             } else { // 'frontend' mode
                 headers['Authorization'] = `Bearer ${apiKey}`;
                 finalApiUrl = apiUrl.replace(/\/$/, '');
@@ -305,23 +472,24 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                     top_p: apiSettings.top_p,
                     presence_penalty: apiSettings.presence_penalty,
                     frequency_penalty: apiSettings.frequency_penalty,
-                    stream: false,
+                    stream: true,
                 });
             }
 
-            console.log(`[${extensionName}] 准备通过前端直连发送请求至 ${finalApiUrl}:`, body);
+            console.log(`[${extensionName}] 准备通过前端直连发送流式请求至 ${finalApiUrl}`);
 
             try {
-                const response = await fetch(finalApiUrl, { method: 'POST', headers, body });
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - ${errorText}`);
-                }
-                const jsonResponse = await response.json();
-                result = responseParser(jsonResponse);
+                const content = await fetchWithStreamAndTimeout(finalApiUrl, { method: 'POST', headers, body }, isGoogleMode);
+                result = { content };
             } catch (error) {
                 console.error(`[${extensionName}] 通过前端直连调用API时出错:`, error);
-                toastr.error('前端直连API请求失败，请检查CORS设置及控制台日志。', 'API错误');
+                
+                // 检查是否为超时错误
+                if (error.message.includes('超时')) {
+                    toastr.error(`流式请求超时: ${error.message}`, 'API超时');
+                } else {
+                    toastr.error('前端直连API请求失败，请检查CORS设置及控制台日志。', 'API错误');
+                }
                 result = null;
             }
         }
@@ -508,19 +676,18 @@ export async function testApiConnection(apiSettings) {
                 if (!profile.api) throw new Error(`预设 "${profile.name || profile.id}" 没有配置API。`);
                 if (!profile.preset) throw new Error(`预设 "${profile.name || profile.id}" 没有选择预设。`);
 
-                console.log(`[${extensionName}] 通过酒馆连接预设 "${profile.name || profile.id}" 测试`);
-                // [核心增强] 在测试时也注入UI参数
-                const testOverrideOptions = {
-                    max_tokens: 10,
-                    temperature: apiSettings.temperature,
-                    top_p: apiSettings.top_p,
-                    presence_penalty: apiSettings.presence_penalty,
-                    frequency_penalty: apiSettings.frequency_penalty,
-                };
-                // [重构] 不再传递覆盖参数，以完全使用酒馆预设中的设置进行测试
-                responsePromise = context.ConnectionManagerRequestService.sendRequest(
+                console.log(`[${extensionName}] 通过酒馆连接预设 "${profile.name || profile.id}" 测试（带超时）`);
+                
+                const requestPromise = context.ConnectionManagerRequestService.sendRequest(
                     profile.id,
                     testMessages
+                );
+                
+                // 添加30秒超时（测试用更短的超时）
+                responsePromise = withTimeout(
+                    requestPromise,
+                    30000,
+                    '酒馆连接测试超时（30秒）'
                 );
             } finally {
                 const currentProfileAfterCall = await window.TavernHelper.triggerSlash('/profile');
@@ -533,8 +700,9 @@ export async function testApiConnection(apiSettings) {
             result = await responsePromise;
         }
         else if (apiMode === 'backend') {
-            console.log(`[${extensionName}] 通过后端代理测试`);
-            const rawResponse = await $.ajax({
+            console.log(`[${extensionName}] 通过后端代理测试（带超时）`);
+            
+            const ajaxPromise = $.ajax({
                 url: '/api/backends/chat-completions/generate',
                 type: 'POST',
                 contentType: 'application/json',
@@ -553,18 +721,24 @@ export async function testApiConnection(apiSettings) {
                     api_key: apiKey,
                 }),
             });
+            
+            // 添加30秒超时
+            const rawResponse = await withTimeout(
+                ajaxPromise,
+                30000,
+                '后端代理测试超时（30秒）'
+            );
             result = normalizeApiResponse(rawResponse);
         } else { // 'frontend' or 'google'
             let finalApiUrl;
             let body;
             let headers = { 'Content-Type': 'application/json' };
-            let responseParser = normalizeApiResponse;
+            const isGoogleMode = apiMode === 'google';
 
-            if (apiMode === 'google') {
+            if (isGoogleMode) {
                 const apiVersion = 'v1beta';
-                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
+                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
                 body = JSON.stringify(buildGoogleRequest(testMessages, { ...apiSettings, max_tokens: 5, temperature: 0.1 }));
-                responseParser = (resp) => normalizeApiResponse(parseGoogleResponse(resp));
             } else { // 'frontend'
                 headers['Authorization'] = `Bearer ${apiKey}`;
                 finalApiUrl = apiUrl.replace(/\/$/, '');
@@ -579,18 +753,13 @@ export async function testApiConnection(apiSettings) {
                     top_p: apiSettings.top_p,
                     presence_penalty: apiSettings.presence_penalty,
                     frequency_penalty: apiSettings.frequency_penalty,
-                    stream: false,
+                    stream: true,
                 });
             }
 
-            console.log(`[${extensionName}] 通过前端直连测试: ${finalApiUrl}`);
-            const response = await fetch(finalApiUrl, { method: 'POST', headers, body });
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
-            }
-            const resultJson = await response.json();
-            result = responseParser(resultJson);
+            console.log(`[${extensionName}] 通过前端直连流式测试: ${finalApiUrl}`);
+            const content = await fetchWithStreamAndTimeout(finalApiUrl, { method: 'POST', headers, body }, isGoogleMode);
+            result = { content };
         }
 
         if (result.error) {
