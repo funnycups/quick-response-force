@@ -153,6 +153,11 @@ const characterSpecificSettings = [
     'disabledWorldbookEntries'
 ];
 
+// [修复] worldbookSource 现在是全局设置，需要从角色卡中清除
+const deprecatedCharacterSettings = [
+    'worldbookSource'
+];
+
 /**
  * 保存单个设置项。
  * 根据设置项的键名，决定是保存到全局设置还是当前角色卡。
@@ -252,7 +257,13 @@ function getMergedApiSettings() {
     const globalSettings = extension_settings[extensionName]?.apiSettings || defaultSettings.apiSettings;
     const characterSettings = character?.data?.extensions?.[extensionName]?.apiSettings || {};
     
-    return { ...globalSettings, ...characterSettings };
+    // [修复] 过滤掉角色卡中已弃用的设置项，防止它们覆盖全局设置
+    const filteredCharacterSettings = { ...characterSettings };
+    deprecatedCharacterSettings.forEach(key => {
+        delete filteredCharacterSettings[key];
+    });
+    
+    return { ...globalSettings, ...filteredCharacterSettings };
 }
 
 /**
@@ -309,6 +320,45 @@ async function clearCharacterStaleSettings(type) {
         } catch (error) {
             console.error(`[${extensionName}] 清除角色${message}失败:`, error);
             toastr.error(`无法清除角色卡上的${message}。`);
+        }
+    }
+}
+
+/**
+ * [修复] 清除当前角色卡上已弃用的设置项（如worldbookSource）
+ * 这些设置现在应该是全局的，不应存储在角色卡上
+ */
+async function clearDeprecatedCharacterSettings() {
+    const character = characters[this_chid];
+    if (!character?.data?.extensions?.[extensionName]?.apiSettings) {
+        return;
+    }
+
+    const charApiSettings = character.data.extensions[extensionName].apiSettings;
+    let settingsCleared = false;
+
+    deprecatedCharacterSettings.forEach(key => {
+        if (charApiSettings[key] !== undefined) {
+            console.log(`[${extensionName}] 清除角色卡上的陈旧设置: ${key} = ${charApiSettings[key]}`);
+            delete charApiSettings[key];
+            settingsCleared = true;
+        }
+    });
+
+    if (settingsCleared) {
+        try {
+            const response = await fetch('/api/characters/merge-attributes', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({
+                    avatar: character.avatar,
+                    data: { extensions: { [extensionName]: { apiSettings: charApiSettings } } }
+                })
+            });
+            if (!response.ok) throw new Error(`API call failed with status: ${response.status}`);
+            console.log(`[${extensionName}] 已成功清除角色卡上的陈旧世界书来源设置。`);
+        } catch (error) {
+            console.error(`[${extensionName}] 清除角色陈旧设置失败:`, error);
         }
     }
 }
@@ -989,6 +1039,8 @@ export function initializeBindings() {
     // 监听角色切换事件，刷新UI
     eventSource.on(event_types.CHAT_CHANGED, () => {
         console.log(`[${extensionName}] 检测到角色/聊天切换，正在刷新设置UI...`);
+        // [修复] 切换角色时，清除角色卡上的陈旧世界书来源设置
+        clearDeprecatedCharacterSettings();
         loadSettings(panel);
     });
 
