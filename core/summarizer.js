@@ -3,7 +3,7 @@
 
 import { extension_settings, getContext } from '/scripts/extensions.js';
 import { extractContentByTag, replaceContentByTag, extractFullTagBlock } from '../utils/tagProcessor.js';
-import { isGoogleEndpoint, convertToGoogleRequest, parseGoogleResponse, buildGoogleApiUrl } from './utils/googleAdapter.js';
+import { isGoogleEndpoint, convertToGoogleRequest, parseGoogleResponse, buildGoogleApiUrl } from '../utils/googleAdapter.js';
 
 const extensionName = 'quick-response-force';
 

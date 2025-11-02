@@ -2,7 +2,7 @@
 // 核心API模块，根据用户反馈重构为三种独立的API模式
 import { getContext } from '/scripts/extensions.js';
 import { getRequestHeaders } from '/script.js';
-import { buildGoogleRequest, parseGoogleResponse } from './utils/googleAdapter.js';
+import { buildGoogleRequest, parseGoogleResponse } from '../utils/googleAdapter.js';
 
 const extensionName = 'quick-response-force';
 
