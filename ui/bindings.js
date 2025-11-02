@@ -456,6 +456,13 @@ async function loadWorldbookEntries(panel) {
 
     const apiSettings = getMergedApiSettings(); // 使用合并后的设置
     const currentSource = apiSettings.worldbookSource || 'character';
+    
+    // [BUG修复] disabledWorldbookEntries是角色卡专属设置，需要直接从角色卡读取，不能从合并设置读取
+    const character = characters[this_chid];
+    const disabledEntries = character?.data?.extensions?.[extensionName]?.apiSettings?.disabledWorldbookEntries || {};
+    
+    console.log(`[${extensionName}] 加载世界书条目 - 当前模式: ${currentSource}, 禁用条目:`, disabledEntries);
+    
     let bookNames = [];
 
     if (currentSource === 'manual') {
@@ -506,7 +513,7 @@ async function loadWorldbookEntries(panel) {
     }
 
     const selectedBooks = bookNames;
-    let disabledEntries = apiSettings.disabledWorldbookEntries || {};
+    // disabledEntries 已在函数开头声明并从角色卡读取
     let totalEntries = 0;
     let visibleEntries = 0;
 
@@ -584,6 +591,7 @@ function saveDisabledEntries() {
         }
     });
 
+    console.log(`[${extensionName}] 保存禁用的世界书条目:`, disabledEntries);
     saveSetting('disabledWorldbookEntries', disabledEntries);
 }
 
