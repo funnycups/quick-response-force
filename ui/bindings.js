@@ -2,6 +2,7 @@
 // 由Cline参照 '优化/' 插件的健壮性实践重构
 
 import { extension_settings, getContext } from '/scripts/extensions.js';
+import { extensionName } from '../utils/settings.js';
 import { characters, this_chid, getRequestHeaders, saveSettingsDebounced, saveSettings as saveSettingsImmediate } from '/script.js';
 import { eventSource, event_types } from '/script.js';
 import { extensionName, defaultSettings } from '../utils/settings.js';
