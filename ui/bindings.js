@@ -940,7 +940,7 @@ function showLatestAnalysisData() {
     }
     
     // 创建模态对话框显示数据
-    const modalHtml = `
+    const modal = $(`
         <div id="qrf_analysis_modal" class="qrf_modal">
             <div class="qrf_modal_content">
                 <div class="qrf_modal_header">
@@ -951,22 +951,34 @@ function showLatestAnalysisData() {
                 </div>
                 <div class="qrf_modal_body">
                     <div class="qrf_modal_actions">
+                        <button id="qrf_edit_analysis" class="menu_button" title="编辑分析数据">
+                            <i class="fa-solid fa-edit"></i> 编辑
+                        </button>
+                        <button id="qrf_save_analysis" class="menu_button" title="保存修改" style="display: none;">
+                            <i class="fa-solid fa-save"></i> 保存
+                        </button>
+                        <button id="qrf_cancel_edit" class="menu_button" title="取消编辑" style="display: none;">
+                            <i class="fa-solid fa-times"></i> 取消
+                        </button>
                         <button id="qrf_copy_analysis" class="menu_button" title="复制到剪贴板">
                             <i class="fa-solid fa-copy"></i> 复制
                         </button>
-                        <small class="notes" style="margin-left: 10px;">字符数: ${latestPlot.length}</small>
+                        <small class="notes" style="margin-left: 10px;">字符数: <span id="qrf_char_count">${latestPlot.length}</span></small>
                     </div>
-                    <pre id="qrf_analysis_content" style="white-space: pre-wrap; word-wrap: break-word; max-height: 500px; overflow-y: auto; padding: 10px; background: var(--SmartThemeBlurTintColor); border-radius: 5px;">${latestPlot}</pre>
+                    <textarea id="qrf_analysis_content" readonly style="width: 100%; min-height: 500px; max-height: 600px; padding: 10px; background: var(--SmartThemeBlurTintColor); border-radius: 5px; border: 1px solid; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.9em; line-height: 1.6; resize: vertical; white-space: pre-wrap; word-wrap: break-word;"></textarea>
                 </div>
             </div>
         </div>
-    `;
+    `);
     
     // 移除已存在的模态框
     $('#qrf_analysis_modal').remove();
     
     // 添加到页面
-    $('body').append(modalHtml);
+    $('body').append(modal);
+    
+    // 使用.text()设置内容以防止HTML渲染
+    $('#qrf_analysis_content').text(latestPlot);
     
     // 绑定关闭事件
     $('#qrf_modal_close, #qrf_analysis_modal').on('click', function(e) {
@@ -975,15 +987,72 @@ function showLatestAnalysisData() {
         }
     });
     
+    // 绑定编辑按钮事件
+    $('#qrf_edit_analysis').on('click', function() {
+        const textarea = $('#qrf_analysis_content');
+        textarea.prop('readonly', false).focus();
+        $(this).hide();
+        $('#qrf_copy_analysis').hide();
+        $('#qrf_save_analysis, #qrf_cancel_edit').show();
+        textarea.css('border-color', '#2196F3');
+    });
+    
+    // 绑定取消编辑事件
+    $('#qrf_cancel_edit').on('click', function() {
+        const textarea = $('#qrf_analysis_content');
+        textarea.prop('readonly', true).text(latestPlot);
+        $('#qrf_char_count').text(latestPlot.length);
+        $(this).hide();
+        $('#qrf_save_analysis').hide();
+        $('#qrf_edit_analysis, #qrf_copy_analysis').show();
+        textarea.css('border-color', '');
+    });
+    
+    // 绑定保存按钮事件
+    $('#qrf_save_analysis').on('click', async function() {
+        const newContent = $('#qrf_analysis_content').val();
+        const context = getContext();
+        
+        if (messageIndex >= 0 && messageIndex < context.chat.length) {
+            // 更新聊天记录中的数据
+            context.chat[messageIndex].qrf_plot = newContent;
+            latestPlot = newContent;
+            
+            // 触发聊天保存
+            try {
+                const { saveChatConditional } = await import('/script.js');
+                await saveChatConditional();
+                toastr.success('分析数据已保存！', '保存成功');
+                console.log(`[${extensionName}] 分析数据已更新并保存到消息 #${messageIndex}`);
+                
+                // 退出编辑模式
+                const textarea = $('#qrf_analysis_content');
+                textarea.prop('readonly', true);
+                $('#qrf_char_count').text(newContent.length);
+                $('#qrf_save_analysis, #qrf_cancel_edit').hide();
+                $('#qrf_edit_analysis, #qrf_copy_analysis').show();
+                textarea.css('border-color', '');
+            } catch (error) {
+                console.error(`[${extensionName}] 保存分析数据失败:`, error);
+                toastr.error('保存失败，请查看控制台。', '保存失败');
+            }
+        }
+    });
+    
     // 绑定复制事件
     $('#qrf_copy_analysis').on('click', function() {
-        const content = latestPlot;
+        const content = $('#qrf_analysis_content').val();
         navigator.clipboard.writeText(content).then(() => {
             toastr.success('已复制到剪贴板！', '复制成功');
         }).catch(err => {
             console.error('复制失败:', err);
             toastr.error('复制失败，请手动选择并复制。', '复制失败');
         });
+    });
+    
+    // 实时更新字符数
+    $('#qrf_analysis_content').on('input', function() {
+        $('#qrf_char_count').text($(this).val().length);
     });
     
     console.log(`[${extensionName}] 显示最新分析数据 (来自消息 #${messageIndex + 1})`);
@@ -1468,7 +1537,11 @@ export function initializeBindings() {
     });
 
     // ---- 查看最新分析数据按钮 ----
-    panel.on('click.qrf', '#qrf_view_latest_analysis', function() {
+    // 使用document级别委托确保按钮始终可点击
+    $(document).off('click.qrf_view_analysis').on('click.qrf_view_analysis', '#qrf_view_latest_analysis', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log(`[${extensionName}] 查看最新分析按钮被点击`);
         showLatestAnalysisData();
     });
 
