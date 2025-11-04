@@ -2,7 +2,6 @@
 // 由Cline参照 '优化/' 插件的健壮性实践重构
 
 import { extension_settings, getContext } from '/scripts/extensions.js';
-import { extensionName } from '../utils/settings.js';
 import { characters, this_chid, getRequestHeaders, saveSettingsDebounced, saveSettings as saveSettingsImmediate } from '/script.js';
 import { eventSource, event_types } from '/script.js';
 import { extensionName, defaultSettings } from '../utils/settings.js';
@@ -904,8 +903,11 @@ function showLatestAnalysisData() {
     // 检查是否有聊天记录
     if (!context || !context.chat || context.chat.length === 0) {
         toastr.warning('当前没有聊天记录。', '无数据');
+        console.log(`[${extensionName}] 查看分析数据：无聊天记录`);
         return;
     }
+    
+    console.log(`[${extensionName}] 开始查找分析数据，聊天记录总数: ${context.chat.length}`);
     
     // 从后往前查找最新的plot数据
     let latestPlot = null;
@@ -913,15 +915,27 @@ function showLatestAnalysisData() {
     
     for (let i = context.chat.length - 1; i >= 0; i--) {
         const message = context.chat[i];
+        console.log(`[${extensionName}] 检查消息 #${i}: is_user=${message.is_user}, has_qrf_plot=${!!message.qrf_plot}`);
+        
         if (message.qrf_plot) {
             latestPlot = message.qrf_plot;
             messageIndex = i;
+            console.log(`[${extensionName}] 找到分析数据于消息 #${i}`);
             break;
         }
     }
     
     if (!latestPlot) {
-        toastr.info('未找到分析数据。请先进行剧情规划。', '无数据');
+        console.warn(`[${extensionName}] 未找到任何qrf_plot数据`);
+        
+        // 提供更详细的调试信息
+        const debugInfo = context.chat.slice(-3).map((msg, idx) => {
+            const actualIndex = context.chat.length - 3 + idx;
+            return `消息#${actualIndex}: is_user=${msg.is_user}, 属性=${Object.keys(msg).join(', ')}`;
+        }).join('\n');
+        
+        console.log(`[${extensionName}] 最近3条消息的属性:\n${debugInfo}`);
+        toastr.info('未找到分析数据。请先进行剧情规划后再试。\n\n提示：请检查浏览器控制台以获取详细信息。', '无数据', {timeOut: 5000});
         return;
     }
     
