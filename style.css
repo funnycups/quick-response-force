@@ -390,3 +390,106 @@
     padding: 30px;
     font-size: 0.9em;
 }
+
+/* 13. 头部按钮布局 */
+#qrf_settings_panel .qrf-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+#qrf_settings_panel .qrf-header h4 {
+    flex-grow: 1;
+}
+
+/* 14. 分析数据模态框样式 */
+.qrf_modal {
+    display: block;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.qrf_modal_content {
+    background: var(--SmartThemeBlurTintColor);
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid;
+    border-radius: 12px;
+    width: 80%;
+    max-width: 900px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    animation: qrf-modal-fade-in 0.3s ease-out;
+    opacity: 0.95;
+}
+
+@keyframes qrf-modal-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.qrf_modal_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 25px;
+    border-bottom: 1px solid;
+    opacity: 0.9;
+    border-radius: 12px 12px 0 0;
+}
+
+.qrf_modal_header h3 {
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: 500;
+}
+
+.qrf_modal_header h3 i {
+    margin-right: 10px;
+    color: #2196F3;
+}
+
+.qrf_modal_body {
+    padding: 25px;
+}
+
+.qrf_modal_actions {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+#qrf_analysis_content {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+#qrf_modal_close {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s, transform 0.2s;
+    padding: 5px 10px;
+}
+
+#qrf_modal_close:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}

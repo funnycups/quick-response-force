@@ -895,6 +895,86 @@ function importPromptPresets(file, panel) {
 }
 
 /**
+ * 显示最新的分析数据
+ */
+function showLatestAnalysisData() {
+    const context = getContext();
+    
+    // 检查是否有聊天记录
+    if (!context || !context.chat || context.chat.length === 0) {
+        toastr.warning('当前没有聊天记录。', '无数据');
+        return;
+    }
+    
+    // 从后往前查找最新的plot数据
+    let latestPlot = null;
+    let messageIndex = -1;
+    
+    for (let i = context.chat.length - 1; i >= 0; i--) {
+        const message = context.chat[i];
+        if (message.qrf_plot) {
+            latestPlot = message.qrf_plot;
+            messageIndex = i;
+            break;
+        }
+    }
+    
+    if (!latestPlot) {
+        toastr.info('未找到分析数据。请先进行剧情规划。', '无数据');
+        return;
+    }
+    
+    // 创建模态对话框显示数据
+    const modalHtml = `
+        <div id="qrf_analysis_modal" class="qrf_modal">
+            <div class="qrf_modal_content">
+                <div class="qrf_modal_header">
+                    <h3><i class="fa-solid fa-file-lines"></i> 最新分析数据 (消息 #${messageIndex + 1})</h3>
+                    <button id="qrf_modal_close" class="menu_button" title="关闭">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="qrf_modal_body">
+                    <div class="qrf_modal_actions">
+                        <button id="qrf_copy_analysis" class="menu_button" title="复制到剪贴板">
+                            <i class="fa-solid fa-copy"></i> 复制
+                        </button>
+                        <small class="notes" style="margin-left: 10px;">字符数: ${latestPlot.length}</small>
+                    </div>
+                    <pre id="qrf_analysis_content" style="white-space: pre-wrap; word-wrap: break-word; max-height: 500px; overflow-y: auto; padding: 10px; background: var(--SmartThemeBlurTintColor); border-radius: 5px;">${latestPlot}</pre>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的模态框
+    $('#qrf_analysis_modal').remove();
+    
+    // 添加到页面
+    $('body').append(modalHtml);
+    
+    // 绑定关闭事件
+    $('#qrf_modal_close, #qrf_analysis_modal').on('click', function(e) {
+        if (e.target === this) {
+            $('#qrf_analysis_modal').remove();
+        }
+    });
+    
+    // 绑定复制事件
+    $('#qrf_copy_analysis').on('click', function() {
+        const content = latestPlot;
+        navigator.clipboard.writeText(content).then(() => {
+            toastr.success('已复制到剪贴板！', '复制成功');
+        }).catch(err => {
+            console.error('复制失败:', err);
+            toastr.error('复制失败，请手动选择并复制。', '复制失败');
+        });
+    });
+    
+    console.log(`[${extensionName}] 显示最新分析数据 (来自消息 #${messageIndex + 1})`);
+}
+
+/**
  * 加载 jailbreak 提示词到UI
  * @param {JQuery} panel - 设置面板的jQuery对象
  */
@@ -1370,6 +1450,11 @@ export function initializeBindings() {
     panel.on('click.qrf', '#qrf_worldbook_entry_deselect_all', () => {
         panel.find('#qrf_worldbook_entry_list_container input[type="checkbox"]').prop('checked', false);
         saveDisabledEntries();
+    });
+
+    // ---- 查看最新分析数据按钮 ----
+    panel.on('click.qrf', '#qrf_view_latest_analysis', function() {
+        showLatestAnalysisData();
     });
 
     // ---- Jailbreak 提示词管理器事件绑定 ----
