@@ -975,7 +975,7 @@ function showLatestAnalysisData() {
     $('#qrf_analysis_modal').remove();
     
     // 添加到页面
-    $('body').append(modal);
+    $('document.documentElement').append(modal);
     
     // 使用.text()设置内容以防止HTML渲染
     $('#qrf_analysis_content').text(latestPlot);
