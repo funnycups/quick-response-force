@@ -940,49 +940,44 @@ function showLatestAnalysisData() {
     }
     
     // 创建模态对话框显示数据
-    const modal = document.createElement('div');
-modal.id = 'qrf_analysis_modal';
-modal.className = 'qrf_modal';
-
-modal.innerHTML = `
-    <div class="qrf_modal_content">
-        <div class="qrf_modal_header">
-            <h3><i class="fa-solid fa-file-lines"></i> 最新分析数据 (消息 #${messageIndex + 1})</h3>
-            <button id="qrf_modal_close" class="menu_button" title="关闭">
-                <i class="fa-solid fa-times"></i>
-            </button>
-        </div>
-        <div class="qrf_modal_body">
-            <div class="qrf_modal_actions">
-                <button id="qrf_edit_analysis" class="menu_button" title="编辑分析数据">
-                    <i class="fa-solid fa-edit"></i> 编辑
+    const modal = $(`
+    <div id="qrf_analysis_modal" class="qrf_modal" style="position: fixed !important; z-index: 10001 !important; left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important; overflow: auto !important;">
+        <div class="qrf_modal_content">
+            <div class="qrf_modal_header">
+                <h3><i class="fa-solid fa-file-lines"></i> 最新分析数据 (消息 #${messageIndex + 1})</h3>
+                <button id="qrf_modal_close" class="menu_button" title="关闭">
+                    <i class="fa-solid fa-times"></i>
                 </button>
-                <button id="qrf_save_analysis" class="menu_button" title="保存修改" style="display: none;">
-                    <i class="fa-solid fa-save"></i> 保存
-                </button>
-                <button id="qrf_cancel_edit" class="menu_button" title="取消编辑" style="display: none;">
-                    <i class="fa-solid fa-times"></i> 取消
-                </button>
-                <button id="qrf_copy_analysis" class="menu_button" title="复制到剪贴板">
-                    <i class="fa-solid fa-copy"></i> 复制
-                </button>
-                <small class="notes" style="margin-left: 10px;">字符数: <span id="qrf_char_count">${latestPlot.length}</span></small>
             </div>
-            <textarea id="qrf_analysis_content" readonly style="width: 100%; min-height: 500px; max-height: 600px; padding: 10px; background: var(--SmartThemeBlurTintColor); border-radius: 5px; border: 1px solid; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.9em; line-height: 1.6; resize: vertical; white-space: pre-wrap; word-wrap: break-word;"></textarea>
+            <div class="qrf_modal_body">
+                <div class="qrf_modal_actions">
+                    <button id="qrf_edit_analysis" class="menu_button" title="编辑分析数据">
+                        <i class="fa-solid fa-edit"></i> 编辑
+                    </button>
+                    <button id="qrf_save_analysis" class="menu_button" title="保存修改" style="display: none;">
+                        <i class="fa-solid fa-save"></i> 保存
+                    </button>
+                    <button id="qrf_cancel_edit" class="menu_button" title="取消编辑" style="display: none;">
+                        <i class="fa-solid fa-times"></i> 取消
+                    </button>
+                    <button id="qrf_copy_analysis" class="menu_button" title="复制到剪贴板">
+                        <i class="fa-solid fa-copy"></i> 复制
+                    </button>
+                    <small class="notes" style="margin-left: 10px;">字符数: <span id="qrf_char_count">${latestPlot.length}</span></small>
+                </div>
+                <textarea id="qrf_analysis_content" readonly style="width: 100%; min-height: 500px; max-height: 600px; padding: 10px; background: var(--SmartThemeBlurTintColor); border-radius: 5px; border: 1px solid; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.9em; line-height: 1.6; resize: vertical; white-space: pre-wrap; word-wrap: break-word;"></textarea>
+            </div>
         </div>
     </div>
-`;
-
-// 转换为 jQuery 对象
-const $modal = $(modal);
+`);
 
 // 移除已存在的模态框
 $('#qrf_analysis_modal').remove();
 
 // 添加到页面
-$('body').append($modal);
+$('body').append(modal);
 
-// 使用.text()设置内容以防止 HTML 渲染
+// 使用.text()设置内容以防止HTML渲染
 $('#qrf_analysis_content').text(latestPlot);
 
     
