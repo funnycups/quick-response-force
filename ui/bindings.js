@@ -896,6 +896,8 @@ function importPromptPresets(file, panel) {
 
 /**
  * 显示最新的分析数据
+ * [架构优化] 与getPlotFromHistory()保持一致的查找策略：
+ * 优先从user消息中查找（新格式），找不到则从assistant消息中查找（旧格式）
  */
 function showLatestAnalysisData() {
     const context = getContext();
@@ -909,19 +911,30 @@ function showLatestAnalysisData() {
     
     console.log(`[${extensionName}] 开始查找分析数据，聊天记录总数: ${context.chat.length}`);
     
-    // 从后往前查找最新的plot数据
+    // 策略1: 优先从user消息中查找最新的plot数据（新格式）
     let latestPlot = null;
     let messageIndex = -1;
     
     for (let i = context.chat.length - 1; i >= 0; i--) {
         const message = context.chat[i];
-        console.log(`[${extensionName}] 检查消息 #${i}: is_user=${message.is_user}, has_qrf_plot=${!!message.qrf_plot}`);
-        
-        if (message.qrf_plot) {
+        if (message.is_user && message.qrf_plot) {
             latestPlot = message.qrf_plot;
             messageIndex = i;
-            console.log(`[${extensionName}] 找到分析数据于消息 #${i}`);
+            console.log(`[${extensionName}] 找到分析数据于用户消息 #${i} (新格式)`);
             break;
+        }
+    }
+    
+    // 策略2: 如果没找到，从assistant消息中查找（旧格式，后向兼容）
+    if (!latestPlot) {
+        for (let i = context.chat.length - 1; i >= 0; i--) {
+            const message = context.chat[i];
+            if (!message.is_user && message.qrf_plot) {
+                latestPlot = message.qrf_plot;
+                messageIndex = i;
+                console.log(`[${extensionName}] 找到分析数据于助手消息 #${i} (旧格式)`);
+                break;
+            }
         }
     }
     

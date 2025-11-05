@@ -11,7 +11,6 @@ import { defaultSettings } from './utils/settings.js';
 
 const extension_name = 'quick-response-force';
 let isProcessing = false;
-let tempPlotToSave = null; // [架构重构] 用于在生成和消息创建之间临时存储plot
 
 /**
  * 将从 st-memory-enhancement 获取的原始表格JSON数据转换为更适合LLM读取的文本格式。
@@ -137,6 +136,7 @@ async function loadPresetAndCleanCharacterData() {
 
 /**
  * [架构重构] 从聊天记录中反向查找最新的plot。
+ * 优先从user消息中读取，如果找不到则从assistant消息中读取（后向兼容）。
  * @returns {string} - 返回找到的plot文本，否则返回空字符串。
  */
 function getPlotFromHistory() {
@@ -145,35 +145,44 @@ function getPlotFromHistory() {
         return '';
     }
 
-    // 从后往前遍历查找
+    // 策略1: 优先从user消息中查找（新逻辑）
     for (let i = context.chat.length - 1; i >= 0; i--) {
         const message = context.chat[i];
-        if (message.qrf_plot) {
-            console.log(`[${extension_name}] Found plot in message ${i}`);
+        if (message.is_user && message.qrf_plot) {
+            console.log(`[${extension_name}] Found plot in user message ${i} (new format)`);
             return message.qrf_plot;
         }
     }
+
+    // 策略2: 如果没找到，从assistant消息中查找（后向兼容）
+    for (let i = context.chat.length - 1; i >= 0; i--) {
+        const message = context.chat[i];
+        if (!message.is_user && message.qrf_plot) {
+            console.log(`[${extension_name}] Found plot in assistant message ${i} (legacy format)`);
+            return message.qrf_plot;
+        }
+    }
+    
     return '';
 }
 
 /**
- * [架构重构] 将plot附加到最新的AI消息上。
+ * [架构优化] 处理策略2中待存储的plot数据。
+ * 在用户消息创建后，将pending plot存储到该消息中。
+ * @param {number} index - 消息在聊天数组中的索引
  */
-async function savePlotToLatestMessage() {
-    if (tempPlotToSave) {
+async function handlePendingPlot(index) {
+    if (window._qrf_pending_plot) {
         const context = getContext();
-        // 在SillyTavern的事件触发时，chat数组应该已经更新
-        if (context.chat.length > 0) {
-            const lastMessage = context.chat[context.chat.length - 1];
-            // 确保是AI消息，然后覆盖或附加plot数据
-            if (lastMessage && !lastMessage.is_user) {
-                lastMessage.qrf_plot = tempPlotToSave;
-                console.log(`[${extension_name}] Plot data attached/overwritten on the latest AI message.`);
-                // SillyTavern should handle saving automatically after generation ends.
-            }
+        const message = context.chat[index];
+        
+        if (message && message.is_user) {
+            message.qrf_plot = window._qrf_pending_plot;
+            console.log(`[${extension_name}] Pending plot stored in user message ${index}`);
         }
-        // 无论成功与否，都清空临时变量，避免污染下一次生成
-        tempPlotToSave = null;
+        
+        // 清空临时变量
+        delete window._qrf_pending_plot;
     }
 }
 
@@ -181,7 +190,7 @@ async function savePlotToLatestMessage() {
 /**
  * [重构] 核心优化逻辑，可被多处调用。
  * @param {string} userMessage - 需要被优化的用户输入文本。
- * @returns {Promise<string|null>} - 返回优化后的完整消息体，如果失败或跳过则返回null。
+ * @returns {Promise<{finalMessage: string, plot: string}|null>} - 返回优化后的完整消息体和plot数据，如果失败或跳过则返回null。
  */
 async function runOptimizationLogic(userMessage) {
     // [功能更新] 触发插件时，发射一个事件，以便UI可以按需刷新
@@ -376,9 +385,8 @@ async function runOptimizationLogic(userMessage) {
                 }
             }
 
-            // [架构重构] 将排除标签后的结果暂存到消息历史
-            // 这样保存的数据就不包含被排除的标签内容
-            tempPlotToSave = processedMessage;
+            // [架构重构] 保存plot数据，稍后将直接存储到用户消息中
+            const plotToSave = processedMessage;
 
             // [新功能] 标签摘取逻辑
             let messageForTavern = processedMessage; // 默认使用完整回复
@@ -416,7 +424,7 @@ async function runOptimizationLogic(userMessage) {
             if (minLength <= 0) {
                 toastr.success('剧情规划大师已完成规划。', '规划成功');
             }
-            return finalMessage;
+            return { finalMessage, plot: plotToSave };
         } else {
             // [关键修改] 所有重试都失败，返回 null
             if ($toast) toastr.clear($toast);
@@ -458,10 +466,17 @@ async function onGenerationAfterCommands(type, params, dryRun) {
             if (messageToProcess && messageToProcess.trim().length > 0) {
                 isProcessing = true;
                 try {
-                    const finalMessage = await runOptimizationLogic(messageToProcess);
-                    if (finalMessage) {
+                    const result = await runOptimizationLogic(messageToProcess);
+                    if (result) {
+                        const { finalMessage, plot } = result;
                         params.prompt = finalMessage; // Inject into generation
                         lastMessage.mes = finalMessage; // Update chat history
+                        
+                        // [架构优化] 将plot直接存储到用户消息中
+                        if (plot) {
+                            lastMessage.qrf_plot = plot;
+                            console.log(`[${extension_name}] Plot stored in user message ${lastMessageIndex}`);
+                        }
                         
                         // [UI修复] 发送消息更新事件以刷新UI
                         eventSource.emit(event_types.MESSAGE_UPDATED, lastMessageIndex);
@@ -488,10 +503,17 @@ async function onGenerationAfterCommands(type, params, dryRun) {
     if (textInBox && textInBox.trim().length > 0) {
         isProcessing = true;
         try {
-            const finalMessage = await runOptimizationLogic(textInBox);
-            if (finalMessage) {
+            const result = await runOptimizationLogic(textInBox);
+            if (result) {
+                const { finalMessage, plot } = result;
                 $('#send_textarea').val(finalMessage);
                 $('#send_textarea').trigger('input');
+                
+                // [架构优化] 在策略2中，我们需要在消息创建后立即存储plot
+                // 使用临时变量，稍后在消息创建事件中存储
+                if (plot) {
+                    window._qrf_pending_plot = plot;
+                }
             }
         } catch (error) {
             console.error(`[${extension_name}] Error processing textarea input:`, error);
@@ -578,8 +600,9 @@ jQuery(async () => {
                     if (userMessage) {
                         isProcessing = true;
                         try {
-                            const finalMessage = await runOptimizationLogic(userMessage);
-                            if (finalMessage) {
+                            const result = await runOptimizationLogic(userMessage);
+                            if (result) {
+                                const { finalMessage, plot } = result;
                                 // 根据来源写回
                                 if (options.injects?.[0]?.content) {
                                     options.injects[0].content = finalMessage;
@@ -588,6 +611,12 @@ jQuery(async () => {
                                 } else {
                                     options.user_input = finalMessage;
                                 }
+                                
+                                // [架构优化] 存储plot数据到pending变量，稍后在消息创建后保存
+                                if (plot) {
+                                    window._qrf_pending_plot = plot;
+                                }
+                                
                                 // 添加标志，防止 GENERATION_AFTER_COMMANDS 重复处理
                                 options._qrf_processed_by_hook = true;
                             }
@@ -608,7 +637,7 @@ jQuery(async () => {
                     eventSource.on(event_types.GENERATION_AFTER_COMMANDS, onGenerationAfterCommands);
                     
                     // 辅助功能
-                    eventSource.on(event_types.GENERATION_ENDED, savePlotToLatestMessage);
+                    eventSource.on(event_types.MESSAGE_SENT, handlePendingPlot); // 在消息发送后处理pending plot
                     eventSource.on(event_types.CHAT_CHANGED, loadPresetAndCleanCharacterData);
 
                     window.qrfEventsRegistered = true;
