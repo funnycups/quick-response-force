@@ -121,6 +121,13 @@
     margin-bottom: 10px; /* 与下方列表的间距 */
 }
 
+#qrf_settings_panel .qrf_placeholder_buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
 #qrf_settings_panel #qrf_worldbook_entry_controls {
     display: flex;
     align-items: center;

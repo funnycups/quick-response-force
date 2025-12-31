@@ -1250,6 +1250,8 @@ export function initializeBindings() {
     if (panel.length === 0 || panel.data('events-bound')) {
         return;
     }
+
+    let lastFocusedPromptTextarea = null;
     
     loadSettings(panel);
 
@@ -1335,6 +1337,46 @@ export function initializeBindings() {
             // 手动触发模型输入框的change，会由上面的监听器捕获并保存
             panel.find('#qrf_model').val(selectedModel).trigger('change');
         }
+    });
+
+    // ---- 提示词占位符模板 ----
+
+    panel.on('focusin.qrf', '#qrf_main_prompt, #qrf_system_prompt, #qrf_final_system_directive', function() {
+        lastFocusedPromptTextarea = this;
+    });
+
+    const insertTextAtCursor = (textarea, textToInsert) => {
+        if (!textarea || typeof textarea.value !== 'string') return;
+
+        const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+        const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+
+        const before = textarea.value.slice(0, start);
+        const after = textarea.value.slice(end);
+        textarea.value = `${before}${textToInsert}${after}`;
+
+        const newCursorPos = start + textToInsert.length;
+        if (typeof textarea.setSelectionRange === 'function') {
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }
+
+        textarea.focus();
+        $(textarea).trigger('input').trigger('change');
+    };
+
+    panel.on('click.qrf', '[data-qrf-insert-placeholder]', function() {
+        const placeholder = $(this).attr('data-qrf-insert-placeholder');
+        if (!placeholder) return;
+
+        const fallback = panel.find('#qrf_system_prompt')[0] || panel.find('#qrf_main_prompt')[0];
+        const targetTextarea = lastFocusedPromptTextarea || fallback;
+        if (!targetTextarea) {
+            toastr.warning('未找到可插入的提示词输入框。');
+            return;
+        }
+
+        insertTextAtCursor(targetTextarea, placeholder);
+        toastr.success(`已插入 ${placeholder}`);
     });
 
     // --- 功能按钮事件 ---

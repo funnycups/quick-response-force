@@ -286,27 +286,6 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
      * @returns {Promise<string|null>}
      */
     const makeApiCall = async () => {
-        const replacePlaceholders = (text) => {
-            if (typeof text !== 'string') return '';
-            // 替换 $1 为世界书内容
-            if (apiSettings.worldbookEnabled) {
-                const worldbookReplacement = worldbookContent ? `\n<worldbook_context>\n${worldbookContent}\n</worldbook_context>\n` : '';
-                text = text.replace(/(?<!\\)\$1/g, worldbookReplacement);
-            }
-            // [新增] 替换 $5 为表格数据内容
-            const tableDataReplacement = tableDataContent ? `\n<table_data_context>\n${tableDataContent}\n</table_data_context>\n` : '';
-            text = text.replace(/(?<!\\)\$5/g, tableDataReplacement);
-
-            return text;
-        };
-
-        // 构建核心提示词消息数组
-        const corePromptMessages = [];
-
-        if (apiSettings.mainPrompt) {
-            corePromptMessages.push({ role: 'system', content: replacePlaceholders(apiSettings.mainPrompt) });
-        }
-
         const fullHistory = Array.isArray(contextMessages) ? [...contextMessages] : [];
         if (userMessage) {
             fullHistory.push({ role: 'user', content: userMessage });
@@ -319,8 +298,50 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
         };
 
         const formattedHistory = fullHistory.map(msg => `${msg.role}："${sanitizeHtml(msg.content)}"`).join(' \n ');
-        if (formattedHistory) {
-            corePromptMessages.push({ role: 'system', content: `以下是前文的用户记录和故事发展，给你用作参考：\n ${formattedHistory}` });
+        const formattedHistoryInjection = formattedHistory
+            ? `以下是前文的用户记录和故事发展，给你用作参考：\n ${formattedHistory}`
+            : '';
+
+        const hasUnescapedHistoryPlaceholder = (text) => {
+            if (typeof text !== 'string') return false;
+            return /(?<!\\)\$7/.test(text);
+        };
+
+        const usesHistoryPlaceholder =
+            hasUnescapedHistoryPlaceholder(apiSettings.mainPrompt) ||
+            hasUnescapedHistoryPlaceholder(apiSettings.systemPrompt);
+
+        const replacePlaceholders = (text) => {
+            if (typeof text !== 'string') return '';
+
+            // 替换 $1 为世界书内容（世界书未启用时会移除该占位符）
+            const worldbookReplacement = (apiSettings.worldbookEnabled && worldbookContent)
+                ? `\n<worldbook_context>\n${worldbookContent}\n</worldbook_context>\n`
+                : '';
+            text = text.replace(/(?<!\\)\$1/g, worldbookReplacement);
+
+            // 替换 $5 为“总体大纲”表内容（含表头）
+            const tableDataReplacement = tableDataContent
+                ? `\n<table_data_context>\n${tableDataContent}\n</table_data_context>\n`
+                : '';
+            text = text.replace(/(?<!\\)\$5/g, tableDataReplacement);
+
+            // 替换 $7 为本次实际读取的前文上下文（AI上下文 + 本次用户输入，格式化后注入）
+            text = text.replace(/(?<!\\)\$7/g, formattedHistoryInjection);
+
+            return text;
+        };
+
+        // 构建核心提示词消息数组
+        const corePromptMessages = [];
+
+        if (apiSettings.mainPrompt) {
+            corePromptMessages.push({ role: 'system', content: replacePlaceholders(apiSettings.mainPrompt) });
+        }
+
+        // 兼容旧行为：若未使用 $7，则仍以独立 system message 注入前文上下文
+        if (formattedHistoryInjection && !usesHistoryPlaceholder) {
+            corePromptMessages.push({ role: 'system', content: formattedHistoryInjection });
         }
 
         if (apiSettings.systemPrompt) {
