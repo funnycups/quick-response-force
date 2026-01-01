@@ -5,6 +5,7 @@ export const extensionName = 'quick-response-force';
 
 export const defaultSettings = {
     enabled: true,
+    minLength: 0,
     promptPresets: [
         {
             "name": "剧情索引",

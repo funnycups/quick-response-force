@@ -818,50 +818,71 @@ function exportPromptPresets() {
 function importPromptPresets(file, panel) {
     if (!file) return;
 
+    function normalizeImportedPreset(preset) {
+        if (!preset || typeof preset !== 'object') return null;
+        if (typeof preset.name !== 'string' || preset.name.trim().length === 0) return null;
+
+        const promptMap = {};
+        if (Array.isArray(preset.prompts)) {
+            for (const prompt of preset.prompts) {
+                if (!prompt || typeof prompt !== 'object') continue;
+                if (typeof prompt.id !== 'string') continue;
+                if (typeof prompt.content !== 'string') continue;
+                promptMap[prompt.id] = prompt.content;
+            }
+        }
+
+        const extractTags = preset.extractTags ?? preset.contextExtractTags ?? preset.context_extract_tags ?? '';
+        const excludeTags = preset.excludeTags ?? preset.contextExcludeTags ?? preset.context_exclude_tags ?? '';
+        const maxRetries = preset.maxRetries ?? preset.loopSettings?.maxRetries ?? 3;
+
+        return {
+            name: preset.name,
+            mainPrompt: promptMap.mainPrompt ?? preset.mainPrompt ?? '',
+            systemPrompt: promptMap.systemPrompt ?? preset.systemPrompt ?? '',
+            finalSystemDirective: promptMap.finalSystemDirective ?? preset.finalSystemDirective ?? '',
+            rateMain: preset.rateMain ?? 1.0,
+            ratePersonal: preset.ratePersonal ?? 1.0,
+            rateErotic: preset.rateErotic ?? 1.0,
+            rateCuckold: preset.rateCuckold ?? 1.0,
+            excludeTags,
+            extractTags,
+            minLength: preset.minLength ?? defaultSettings.minLength,
+            contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount,
+            requiredKeywords: preset.requiredKeywords ?? '',
+            maxRetries,
+        };
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
             const importedPresets = JSON.parse(e.target.result);
 
-            if (!Array.isArray(importedPresets)) {
-                throw new Error('JSON文件格式不正确，根节点必须是一个数组。');
-            }
+            const presetList = Array.isArray(importedPresets)
+                ? importedPresets
+                : (importedPresets?.promptPresets && Array.isArray(importedPresets.promptPresets))
+                    ? importedPresets.promptPresets
+                    : null;
+
+            if (!presetList) throw new Error('JSON文件格式不正确，根节点必须是数组（或包含 promptPresets 数组）。');
 
             let currentPresets = extension_settings[extensionName]?.promptPresets || [];
             let importedCount = 0;
             let overwrittenCount = 0;
 
-            importedPresets.forEach(preset => {
-                if (preset && typeof preset.name === 'string' && preset.name.length > 0) {
-                    const presetData = {
-                        name: preset.name,
-                        mainPrompt: preset.mainPrompt || '',
-                        systemPrompt: preset.systemPrompt || '',
-                        finalSystemDirective: preset.finalSystemDirective || '',
-                        rateMain: preset.rateMain ?? 1.0,
-                        ratePersonal: preset.ratePersonal ?? 1.0,
-                        rateErotic: preset.rateErotic ?? 1.0,
-                        rateCuckold: preset.rateCuckold ?? 1.0,
-                        // [新功能] 导入时识别新设置，并提供默认值以兼容旧预设
-                        excludeTags: preset.excludeTags || '',
-                        extractTags: preset.extractTags || '',
-                        minLength: preset.minLength ?? defaultSettings.minLength,
-                        contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount,
-                        requiredKeywords: preset.requiredKeywords || '',
-                        maxRetries: preset.maxRetries ?? 3
-                    };
+            presetList.forEach(preset => {
+                const presetData = normalizeImportedPreset(preset);
+                if (!presetData) return;
 
-                    const existingIndex = currentPresets.findIndex(p => p.name === preset.name);
+                const existingIndex = currentPresets.findIndex(p => p.name === presetData.name);
 
-                    if (existingIndex !== -1) {
-                        // 覆盖现有预设
-                        currentPresets[existingIndex] = presetData;
-                        overwrittenCount++;
-                    } else {
-                        // 添加新预设
-                        currentPresets.push(presetData);
-                        importedCount++;
-                    }
+                if (existingIndex !== -1) {
+                    currentPresets[existingIndex] = presetData;
+                    overwrittenCount++;
+                } else {
+                    currentPresets.push(presetData);
+                    importedCount++;
                 }
             });
 
