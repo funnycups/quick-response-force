@@ -192,7 +192,7 @@ async function handlePendingPlot(index) {
  * @param {string} userMessage - 需要被优化的用户输入文本。
  * @returns {Promise<{finalMessage: string, plot: string}|null>} - 返回优化后的完整消息体和plot数据，如果失败或跳过则返回null。
  */
-async function runOptimizationLogic(userMessage) {
+async function runOptimizationLogic(userMessage, generationType = 'normal') {
     // [功能更新] 触发插件时，发射一个事件，以便UI可以按需刷新
     eventSource.emit('qrf-plugin-triggered');
 
@@ -254,7 +254,7 @@ async function runOptimizationLogic(userMessage) {
 
         let worldbookContent = '';
         if (apiSettings.worldbookEnabled) {
-            worldbookContent = await getCombinedWorldbookContent(context, apiSettings);
+            worldbookContent = await getCombinedWorldbookContent(context, apiSettings, userMessage, generationType);
         }
 
         // [架构重构] 读取上一轮优化结果，用于$6占位符
@@ -466,7 +466,7 @@ async function onGenerationAfterCommands(type, params, dryRun) {
             if (messageToProcess && messageToProcess.trim().length > 0) {
                 isProcessing = true;
                 try {
-                    const result = await runOptimizationLogic(messageToProcess);
+                    const result = await runOptimizationLogic(messageToProcess, type);
                     if (result) {
                         const { finalMessage, plot } = result;
                         params.prompt = finalMessage; // Inject into generation
@@ -503,7 +503,7 @@ async function onGenerationAfterCommands(type, params, dryRun) {
     if (textInBox && textInBox.trim().length > 0) {
         isProcessing = true;
         try {
-            const result = await runOptimizationLogic(textInBox);
+            const result = await runOptimizationLogic(textInBox, type);
             if (result) {
                 const { finalMessage, plot } = result;
                 $('#send_textarea').val(finalMessage);
@@ -600,7 +600,7 @@ jQuery(async () => {
                     if (userMessage) {
                         isProcessing = true;
                         try {
-                            const result = await runOptimizationLogic(userMessage);
+                            const result = await runOptimizationLogic(userMessage, 'normal');
                             if (result) {
                                 const { finalMessage, plot } = result;
                                 // 根据来源写回
