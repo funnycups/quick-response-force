@@ -22,33 +22,54 @@ function formatTableDataForLLM(jsonData) {
         return '当前无任何可用的表格数据。';
     }
 
-    let output = '以下是当前角色聊天记录中，由st-memory-enhancement插件保存的全部表格数据：\n';
+    const escapeCell = (value) => {
+        const text = String(value ?? '').replace(/\r?\n/g, '<br>').replace(/\t/g, ' ').trim();
+        // Markdown 表格以 `|` 分列，这里做最小转义避免破坏结构
+        return text.replace(/\|/g, '\\|');
+    };
+
+    const buildMarkdownTable = (headers, rows) => {
+        const headerLine = `| ${headers.map(escapeCell).join(' | ')} |`;
+        const separatorLine = `|${headers.map(() => '---').join('|')}|`;
+        const rowLines = rows.map((row) => `| ${row.map(escapeCell).join(' | ')} |`);
+        return [headerLine, separatorLine, ...rowLines].join('\n');
+    };
+
+    let output = '以下是当前角色聊天记录中的全部数据：\n';
 
     for (const sheetId in jsonData) {
         if (Object.prototype.hasOwnProperty.call(jsonData, sheetId)) {
             const sheet = jsonData[sheetId];
             // 确保表格有名称，且内容至少包含表头和一行数据
             if (sheet && sheet.name && sheet.content && sheet.content.length > 1) {
-                output += `\n## 表格: ${sheet.name}\n`;
-                const headers = sheet.content[0].slice(1); // 第一行是表头，第一个元素通常为空
-                const rows = sheet.content.slice(1);
+                const rawHeaders = sheet.content[0].slice(1).map((h) => String(h ?? '').trim()); // 第一行是表头，第一个元素通常为空
+                const rawRows = sheet.content.slice(1).map((row) => row.slice(1));
 
-                rows.forEach((row, rowIndex) => {
-                    const rowData = row.slice(1);
-                    let rowOutput = '';
-                    let hasContent = false;
-                    headers.forEach((header, index) => {
-                        const cellValue = rowData[index];
-                        if (cellValue !== null && cellValue !== undefined && String(cellValue).trim() !== '') {
-                            rowOutput += `  - ${header}: ${cellValue}\n`;
-                            hasContent = true;
-                        }
+                // 仅保留“有表头”或“至少有一行有内容”的列，避免输出一堆空列
+                const keepColumnIndexes = rawHeaders
+                    .map((_, index) => index)
+                    .filter((index) => {
+                        const header = rawHeaders[index];
+                        if (header) return true;
+                        return rawRows.some((row) => String(row?.[index] ?? '').trim() !== '');
                     });
 
-                    if (hasContent) {
-                        output += `\n### ${sheet.name} - 第 ${rowIndex + 1} 条记录\n${rowOutput}`;
-                    }
-                });
+                const headers = keepColumnIndexes.map((index) => rawHeaders[index] || `列${index + 1}`);
+                const rows = rawRows
+                    .map((row) => keepColumnIndexes.map((index) => row?.[index] ?? ''))
+                    .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''));
+
+                output += `\n# ${sheet.name}\n\n`;
+                if (headers.length === 0) {
+                    output += '（无可用列）\n';
+                    continue;
+                }
+                if (rows.length === 0) {
+                    output += buildMarkdownTable(headers, []);
+                    output += '\n';
+                    continue;
+                }
+                output += `${buildMarkdownTable(headers, rows)}\n`;
             }
         }
     }
