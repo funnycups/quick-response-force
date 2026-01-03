@@ -280,7 +280,43 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
                     }
                 }
 
-                const maxContext = Number(context.maxContext) || 4096;
+                // 对齐 ST 真实发送时的“可用上下文长度”用于 WI budget 计算。
+                // 注意：getContext().maxContext 只反映 max_context（全局滑条），而 OpenAI 聊天补全通常用 oai_settings.openai_max_context。
+                // 不同 ST 版本/构建下 getMaxContextSize 可能不是可导出的符号，所以这里用多级回退。
+                const resolveMaxContext = async () => {
+                    try {
+                        if (typeof window.getMaxContextSize === 'function') {
+                            const value = Number(window.getMaxContextSize());
+                            if (Number.isFinite(value) && value > 0) return value;
+                        }
+                    } catch {
+                        // ignore
+                    }
+
+                    try {
+                        const scriptMod = await import('/script.js');
+                        if (typeof scriptMod.getMaxContextSize === 'function') {
+                            const value = Number(scriptMod.getMaxContextSize());
+                            if (Number.isFinite(value) && value > 0) return value;
+                        }
+
+                        // OpenAI chat completion path (most common mismatch source)
+                        if (scriptMod.main_api === 'openai') {
+                            const openaiMod = await import('/scripts/openai.js');
+                            const openaiMax = Number(openaiMod?.oai_settings?.openai_max_context);
+                            const openaiMaxTokens = Number(openaiMod?.oai_settings?.openai_max_tokens);
+                            const value = openaiMax - openaiMaxTokens;
+                            if (Number.isFinite(value) && value > 0) return value;
+                        }
+                    } catch {
+                        // ignore
+                    }
+
+                    const fallback = Number(context.maxContext);
+                    return (Number.isFinite(fallback) && fallback > 0) ? fallback : 4096;
+                };
+
+                const maxContext = await resolveMaxContext();
                 // 这里必须使用“非 dryRun”的扫描路径，否则 ST 的 sticky/cooldown（timed effects）不会被计入，导致条目缺失。
                 // 但为了避免影响 ST 自己随后的真实生成，我们在 finally 中完整还原 timedWorldInfo / Author's Note 等副作用。
                 const activated = await checkWorldInfo(chatForWI, maxContext, false, globalScanData);
