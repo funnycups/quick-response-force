@@ -460,10 +460,9 @@ async function onGenerationAfterCommands(type, params, dryRun) {
 
         // If the last message is a new user message, process it.
         if (lastMessage && lastMessage.is_user && !lastMessage._qrf_processed) {
-            lastMessage._qrf_processed = true; // Prevent reprocessing
-
             const messageToProcess = lastMessage.mes;
             if (messageToProcess && messageToProcess.trim().length > 0) {
+                lastMessage._qrf_processed = true; // Prevent reprocessing (only after we have content)
                 isProcessing = true;
                 try {
                     const result = await runOptimizationLogic(messageToProcess, type);
