@@ -1,6 +1,7 @@
-import { loadWorldInfo, world_names } from "/scripts/world-info.js";
+import { loadWorldInfo, world_info, world_names } from "/scripts/world-info.js";
 import { characters } from "/script.js";
 import { getContext } from "/scripts/extensions.js";
+import { getCharaFilename } from "/scripts/utils.js";
 
 /**
  * 检查 TavernHelper API 是否可用。
@@ -41,14 +42,41 @@ export async function safeCharLorebooks(options = { type: 'all' }) {
         }
         const context = getContext();
         const character = characters[context.characterId];
-        const primary = character?.data?.extensions?.world;
-        return { primary: primary || null, additional: [] };
+        const type = String(options?.type ?? 'all').trim().toLowerCase() || 'all';
+
+        const primary = character?.data?.extensions?.world || null;
+        let additional = [];
+
+        // Mirror SillyTavern's additional lorebook binding (world_info.charLore) when TavernHelper is not available.
+        // See SillyTavern/public/scripts/world-info.js:getCharBookCallback for the reference behavior.
+        if (type === 'all' || type === 'additional') {
+            const fileName = getCharaFilename(context.characterId);
+            const extraCharLore = world_info?.charLore?.find((e) => e?.name === fileName);
+            if (extraCharLore && Array.isArray(extraCharLore.extraBooks)) {
+                additional = [...new Set(extraCharLore.extraBooks.map(x => String(x ?? '').trim()).filter(Boolean))];
+            }
+        }
+
+        return {
+            primary: type === 'additional' ? null : primary,
+            additional: type === 'primary' ? [] : additional,
+        };
     } catch (error) {
         console.error('[剧情优化大师-兼容性] 获取角色世界书失败:', error);
         const context = getContext();
         const character = characters[context.characterId];
-        const primary = character?.data?.extensions?.world;
-        return { primary: primary || null, additional: [] };
+        const primary = character?.data?.extensions?.world || null;
+        let additional = [];
+        try {
+            const fileName = getCharaFilename(context.characterId);
+            const extraCharLore = world_info?.charLore?.find((e) => e?.name === fileName);
+            if (extraCharLore && Array.isArray(extraCharLore.extraBooks)) {
+                additional = [...new Set(extraCharLore.extraBooks.map(x => String(x ?? '').trim()).filter(Boolean))];
+            }
+        } catch {
+            // ignore
+        }
+        return { primary, additional };
     }
 }
 

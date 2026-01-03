@@ -6,6 +6,7 @@ import { checkWorldInfo, loadWorldInfo, worldInfoCache, world_info_include_names
 import { characters, chat_metadata, getCharacterCardFields, this_chid } from '/script.js';
 import { power_user } from '/scripts/power-user.js';
 import { getCharaFilename } from '/scripts/utils.js';
+import { NOTE_MODULE_NAME } from '/scripts/authors-note.js';
 
 /**
  * 提取并合并当前角色所有关联世界书的内容，并根据新的、支持递归的筛选逻辑进行处理。
@@ -124,6 +125,10 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
             const originalPersonaWorld = power_user?.persona_description_lorebook ?? null;
             const originalWorldInfoCache = new Map();
             const originalWorldInfoCacheMisses = new Set();
+            const hadTimedWorldInfo = !!(chat_metadata && Object.prototype.hasOwnProperty.call(chat_metadata, 'timedWorldInfo'));
+            const originalTimedWorldInfo = hadTimedWorldInfo ? structuredClone(chat_metadata.timedWorldInfo) : undefined;
+            const hadOriginalNotePrompt = !!(context?.extensionPrompts && Object.prototype.hasOwnProperty.call(context.extensionPrompts, NOTE_MODULE_NAME));
+            const originalNotePrompt = hadOriginalNotePrompt ? structuredClone(context.extensionPrompts[NOTE_MODULE_NAME]) : undefined;
 
             const restore = () => {
                 // 还原临时修改的 world info 缓存（用于实现“即便 ST 里启用，也可在插件里禁用条目”）
@@ -141,6 +146,13 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
                 if (chat_metadata && Object.prototype.hasOwnProperty.call(chat_metadata, 'world_info')) {
                     chat_metadata.world_info = originalChatWorld;
                 }
+                if (chat_metadata) {
+                    if (hadTimedWorldInfo) {
+                        chat_metadata.timedWorldInfo = originalTimedWorldInfo;
+                    } else if (Object.prototype.hasOwnProperty.call(chat_metadata, 'timedWorldInfo')) {
+                        delete chat_metadata.timedWorldInfo;
+                    }
+                }
                 if (power_user && Object.prototype.hasOwnProperty.call(power_user, 'persona_description_lorebook')) {
                     power_user.persona_description_lorebook = originalPersonaWorld;
                 }
@@ -152,6 +164,13 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
                         world_info.charLore = originalCharLore;
                     } else if (Object.hasOwn(world_info, 'charLore')) {
                         delete world_info.charLore;
+                    }
+                }
+                if (context?.extensionPrompts) {
+                    if (hadOriginalNotePrompt) {
+                        context.extensionPrompts[NOTE_MODULE_NAME] = originalNotePrompt;
+                    } else if (Object.prototype.hasOwnProperty.call(context.extensionPrompts, NOTE_MODULE_NAME)) {
+                        delete context.extensionPrompts[NOTE_MODULE_NAME];
                     }
                 }
             };
@@ -232,19 +251,20 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
                     trigger: typeof generationType === 'string' && generationType.length > 0 ? generationType : 'normal',
                 };
 
-                const coreChat = Array.isArray(context.chat) ? context.chat.filter(x => !x?.is_system) : [];
+                // 尽量对齐 ST 的 coreChat：保留非 system；system 仅保留工具调用相关消息。
+                const coreChat = Array.isArray(context.chat)
+                    ? context.chat.filter(x => !x?.is_system || Array.isArray(x?.extra?.tool_invocations))
+                    : [];
                 const pendingUserMessage = String(userMessage || '').trim();
                 const userDisplayName = context?.name1 || 'You';
                 const pendingScanText = world_info_include_names ? `${userDisplayName}: ${pendingUserMessage}` : pendingUserMessage;
 
                 const chatForWI = coreChat
                     .map(x => {
-                        const text = String(x?.mes ?? '').trim();
-                        if (!text) return '';
+                        const text = String(x?.mes ?? '');
                         if (world_info_include_names && x?.name) return `${x.name}: ${text}`;
                         return text;
                     })
-                    .filter(Boolean)
                     .reverse();
 
                 if (pendingUserMessage) {
@@ -261,7 +281,9 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
                 }
 
                 const maxContext = Number(context.maxContext) || 4096;
-                const activated = await checkWorldInfo(chatForWI, maxContext, true, globalScanData);
+                // 这里必须使用“非 dryRun”的扫描路径，否则 ST 的 sticky/cooldown（timed effects）不会被计入，导致条目缺失。
+                // 但为了避免影响 ST 自己随后的真实生成，我们在 finally 中完整还原 timedWorldInfo / Author's Note 等副作用。
+                const activated = await checkWorldInfo(chatForWI, maxContext, false, globalScanData);
                 if (!activated?.allActivatedEntries) return '';
 
                 const allowed = new Set(bookNames);
