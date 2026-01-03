@@ -14,7 +14,7 @@ let isProcessing = false;
 
 /**
  * 将从 st-memory-enhancement 获取的原始表格JSON数据转换为更适合LLM读取的文本格式。
- * @param {object} jsonData - ext_exportAllTablesAsJson 返回的JSON对象。
+ * @param {object} jsonData - exportTableAsJson 返回的JSON对象。
  * @returns {string} - 格式化后的文本字符串。
  */
 function formatTableDataForLLM(jsonData) {
@@ -262,8 +262,8 @@ async function runOptimizationLogic(userMessage, generationType = 'normal') {
 
         let tableDataContent = '';
         try {
-            if (window.stMemoryEnhancement && typeof window.stMemoryEnhancement.ext_exportAllTablesAsJson === 'function') {
-                const tableDataJson = window.stMemoryEnhancement.ext_exportAllTablesAsJson();
+            if (window.AutoCardUpdaterAPI && typeof window.AutoCardUpdaterAPI.exportTableAsJson === 'function') {
+                const tableDataJson = window.AutoCardUpdaterAPI.exportTableAsJson();
                 tableDataContent = formatTableDataForLLM(tableDataJson);
             } else {
                 tableDataContent = '依赖的“记忆增强”插件未加载或版本不兼容。';
