@@ -3,7 +3,7 @@
 
 import { safeCharLorebooks, safeLorebookEntries } from './tavernhelper-compatibility.js';
 import { checkWorldInfo, loadWorldInfo, worldInfoCache, world_info_include_names, world_info } from '/scripts/world-info.js';
-import { characters, chat_metadata, getCharacterCardFields, this_chid } from '/script.js';
+import { characters, chat_metadata, extension_prompt_roles, extension_prompt_types, getCharacterCardFields, this_chid } from '/script.js';
 import { power_user } from '/scripts/power-user.js';
 import { getCharaFilename } from '/scripts/utils.js';
 import { NOTE_MODULE_NAME } from '/scripts/authors-note.js';
@@ -82,13 +82,106 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
         return text;
     };
 
+    const applyWorldbookLimit = (text) => {
+        const content = String(text || '');
+        if (!content) return '';
+
+        // [修复] 支持设为0来禁用字符限制
+        const limit = apiSettings.worldbookCharLimit !== undefined
+            ? apiSettings.worldbookCharLimit
+            : 60000;
+
+        if (limit > 0 && content.length > limit) {
+            console.log(`[剧情优化大师] 世界书内容 (${content.length} chars) 超出限制 (${limit} chars)，将被截断。`);
+            return content.substring(0, limit);
+        }
+
+        return content;
+    };
+
+    const getActiveScriptInjectPrompts = async () => {
+        // SillyTavern 的 /listinjects 展示的是当前聊天的 script injections（chat_metadata.script_injects）。
+        // 本插件绕过 ST 的 sendGenerationRequest 流程，因此需要手动把这些注入拼进最终提示词里。
+        const meta = context?.chatMetadata ?? chat_metadata;
+        const injects = meta?.script_injects;
+        if (!injects || typeof injects !== 'object') return '';
+
+        const extPrompts = context?.extensionPrompts && typeof context.extensionPrompts === 'object'
+            ? context.extensionPrompts
+            : {};
+
+        const positionName = (position) => {
+            const entries = Object.entries(extension_prompt_types || {});
+            return entries.find(([_, value]) => value === position)?.[0] ?? String(position ?? 'unknown');
+        };
+
+        const roleName = (role) => {
+            switch (role) {
+                case extension_prompt_roles?.USER:
+                    return 'user';
+                case extension_prompt_roles?.ASSISTANT:
+                    return 'assistant';
+                case extension_prompt_roles?.SYSTEM:
+                default:
+                    return 'system';
+            }
+        };
+
+        /** @type {{id:string,value:string,position:number,depth:number,scan:boolean,role:number}[]} */
+        const active = [];
+
+        for (const [id, raw] of Object.entries(injects)) {
+            const prefixedId = `script_inject_${id}`;
+            const prompt = extPrompts?.[prefixedId];
+
+            const value = String(prompt?.value ?? raw?.value ?? '').trim();
+            if (!value) continue;
+
+            // 若注入带有 filter（闭包），尽量对齐 ST 的行为：filter 为 false 时不注入。
+            if (prompt?.filter) {
+                try {
+                    const ok = await prompt.filter();
+                    if (!ok) continue;
+                } catch (e) {
+                    console.warn('[qrf] Script inject filter 执行失败，将跳过该 inject:', id, e);
+                    continue;
+                }
+            }
+
+            const position = Number(prompt?.position ?? raw?.position ?? extension_prompt_types?.IN_PROMPT ?? 0);
+            const depth = Number(prompt?.depth ?? raw?.depth ?? 0);
+            const scan = !!(prompt?.scan ?? raw?.scan ?? false);
+            const role = Number(prompt?.role ?? raw?.role ?? extension_prompt_roles?.SYSTEM ?? 0);
+
+            active.push({ id: String(id), value, position, depth, scan, role });
+        }
+
+        if (active.length === 0) {
+            console.debug('[qrf] Script injects detected but none are active (empty/filtered).');
+            return '';
+        }
+
+        console.debug('[qrf] Active script injects:', active.map(x => x.id));
+
+        // 以“世界书条目”风格输出，避免丢失上下文来源信息。
+        const blocks = active.map((x) => {
+            const metaLine = `[inject:${x.id} | ${positionName(x.position)} | depth:${x.depth} | scan:${x.scan} | role:${roleName(x.role)}]`;
+            return `${metaLine}\n${x.value}`;
+        });
+
+        return `【Additional Info】\n\n${blocks.join('\n\n---\n\n')}`.trim();
+    };
+
     try {
+        const scriptInjectContent = await getActiveScriptInjectPrompts();
+        const scriptInjectFinal = applyWorldbookLimit(stripConfiguredWorldInfoContent(scriptInjectContent));
+
         let bookNames = [];
         
         if (apiSettings.worldbookSource === 'manual') {
             // 仅使用手动选择的世界书
             bookNames = normalizeWorldNames(apiSettings.selectedWorldbooks);
-            if (bookNames.length === 0) return '';
+            if (bookNames.length === 0) return scriptInjectFinal;
         } else if (apiSettings.worldbookSource === 'both') {
             // 同时使用角色卡世界书和额外指定的世界书
             const charLorebooks = await safeCharLorebooks({ type: 'all' });
@@ -99,14 +192,14 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
             bookNames.push(...normalizeWorldNames(apiSettings.additionalWorldbooks));
             bookNames = normalizeWorldNames(bookNames);
             
-            if (bookNames.length === 0) return '';
+            if (bookNames.length === 0) return scriptInjectFinal;
         } else {
             // 默认：仅使用角色卡绑定的世界书
             const charLorebooks = await safeCharLorebooks({ type: 'all' });
             if (charLorebooks.primary) bookNames.push(charLorebooks.primary);
             if (charLorebooks.additional?.length) bookNames.push(...charLorebooks.additional);
             bookNames = normalizeWorldNames(bookNames);
-            if (bookNames.length === 0) return '';
+            if (bookNames.length === 0) return scriptInjectFinal;
         }
 
         const tryGetWorldbookContentViaOfficialWI = async () => {
@@ -415,13 +508,8 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
 
         const officialContent = await tryGetWorldbookContentViaOfficialWI();
         if (typeof officialContent === 'string') {
-            const stripped = stripConfiguredWorldInfoContent(officialContent);
-            const limit = apiSettings.worldbookCharLimit !== undefined ? apiSettings.worldbookCharLimit : 60000;
-            if (limit > 0 && stripped.length > limit) {
-                console.log(`[剧情优化大师] 世界书内容 (${stripped.length} chars) 超出限制 (${limit} chars)，将被截断。`);
-                return stripped.substring(0, limit);
-            }
-            return stripped;
+            const combined = [officialContent, scriptInjectContent].filter(Boolean).join('\n\n---\n\n');
+            return applyWorldbookLimit(stripConfiguredWorldInfoContent(combined));
         }
 
         let allEntries = [];
@@ -434,7 +522,7 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
             }
         }
 
-        if (allEntries.length === 0) return '';
+        if (allEntries.length === 0) return scriptInjectFinal;
 
         // [功能更新] 应用反向选择逻辑：过滤掉那些在disabledWorldbookEntries中被记录的条目。
         const disabledEntriesMap = apiSettings.disabledWorldbookEntries || {};
@@ -447,7 +535,7 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
             return !isDisabled;
         });
 
-        if (userEnabledEntries.length === 0) return '';
+        if (userEnabledEntries.length === 0) return scriptInjectFinal;
         
         // [修复] hook 阶段最新用户消息可能尚未写入 chat 历史：这里手动把 userMessage 纳入扫描文本
         const historyParts = Array.isArray(context.chat) ? context.chat.map(message => message?.mes).filter(Boolean) : [];
@@ -492,21 +580,11 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
         }
 
         const finalContent = Array.from(triggeredEntries).map(entry => entry.content).filter(Boolean);
-        if (finalContent.length === 0) return '';
+        if (finalContent.length === 0) return scriptInjectFinal;
 
-        const combinedContent = stripConfiguredWorldInfoContent(finalContent.join('\n\n---\n\n'));
+        const combinedContent = stripConfiguredWorldInfoContent([finalContent.join('\n\n---\n\n'), scriptInjectContent].filter(Boolean).join('\n\n---\n\n'));
         
-        // [修复] 支持设为0来禁用字符限制
-        const limit = apiSettings.worldbookCharLimit !== undefined 
-            ? apiSettings.worldbookCharLimit 
-            : 60000;
-        
-        if (limit > 0 && combinedContent.length > limit) {
-            console.log(`[剧情优化大师] 世界书内容 (${combinedContent.length} chars) 超出限制 (${limit} chars)，将被截断。`);
-            return combinedContent.substring(0, limit);
-        }
-
-        return combinedContent;
+        return applyWorldbookLimit(combinedContent);
 
     } catch (error) {
         console.error(`[剧情优化大师] 处理世界书逻辑时出错:`, error);
