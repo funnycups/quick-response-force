@@ -265,13 +265,84 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
                 if (!activated?.allActivatedEntries) return '';
 
                 const allowed = new Set(bookNames);
-                const contents = [];
+                const rawEntries = Array.from(activated.allActivatedEntries || [])
+                    .filter(entry => entry && allowed.has(entry.world));
 
-                for (const entry of activated.allActivatedEntries) {
-                    if (!entry || !allowed.has(entry.world)) continue;
-                    const content = String(entry.content ?? '').trim();
-                    if (content) contents.push(content);
+                if (rawEntries.length === 0) return '';
+
+                const getOrder = (entry) => {
+                    const value = Number(entry?.order);
+                    return Number.isFinite(value) ? value : 0;
+                };
+
+                const getUid = (entry) => {
+                    const value = Number(entry?.uid);
+                    return Number.isFinite(value) ? value : 0;
+                };
+
+                const toContent = (entry) => {
+                    const text = String(entry?.content ?? '').trim();
+                    return text.length ? text : '';
+                };
+
+                const sortByOrderThenUid = (a, b) =>
+                    a.order - b.order ||
+                    a.uid - b.uid;
+
+                // ST 常用 position：0=before, 1=after, 4=atDepth（参见 ST 的 world_info_position 枚举）
+                const before = [];
+                const after = [];
+                const others = [];
+                /** @type {Map<string, { depth: number, role: string, items: Array<{order:number, uid:number, content:string}> }>} */
+                const depthGroups = new Map();
+
+                for (const entry of rawEntries) {
+                    const content = toContent(entry);
+                    if (!content) continue;
+
+                    const item = { order: getOrder(entry), uid: getUid(entry), content };
+                    const position = Number(entry?.position);
+
+                    if (position === 0) {
+                        before.push(item);
+                        continue;
+                    }
+                    if (position === 1) {
+                        after.push(item);
+                        continue;
+                    }
+                    if (position === 4) {
+                        const depth = Number.isFinite(Number(entry?.depth)) ? Number(entry.depth) : 0;
+                        const role = String(entry?.role ?? 'system');
+                        const key = `${depth}::${role}`;
+                        if (!depthGroups.has(key)) {
+                            depthGroups.set(key, { depth, role, items: [] });
+                        }
+                        depthGroups.get(key).items.push(item);
+                        continue;
+                    }
+
+                    others.push(item);
                 }
+
+                before.sort(sortByOrderThenUid);
+                after.sort(sortByOrderThenUid);
+                others.sort(sortByOrderThenUid);
+
+                const sortedDepthGroups = Array.from(depthGroups.values())
+                    .map(group => {
+                        group.items.sort(sortByOrderThenUid);
+                        return group;
+                    })
+                    // 近似 ST 注入：depth 越大越“更早”插入到对话里；这里按 depth 从大到小展示
+                    .sort((a, b) => b.depth - a.depth || a.role.localeCompare(b.role));
+
+                const contents = [
+                    ...before.map(x => x.content),
+                    ...sortedDepthGroups.flatMap(group => group.items.map(x => x.content)),
+                    ...after.map(x => x.content),
+                    ...others.map(x => x.content),
+                ].filter(Boolean);
 
                 const combined = contents.join('\n\n---\n\n');
                 console.debug('[qrf] Official WI scan result length:', combined.length);
