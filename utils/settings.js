@@ -37,6 +37,8 @@ export const defaultSettings = {
         worldbookEnabled: true,
         worldbookSource: 'character', // 'character', 'manual', or 'both'
         worldbookCharLimit: 60000,
+        worldbookStripEnabled: true, // [去重] 对世界书内容做正则剔除
+        worldbookStripPatterns: '/<最新数据与记录>[\\s\\S]*?<\\/最新数据与记录>/g\n/<剧情大纲编码索引>[\\s\\S]*?<\\/剧情大纲编码索引>/g',
         rateMain: 15,
         ratePersonal: 10,
         rateErotic: 0,

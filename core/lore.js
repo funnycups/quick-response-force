@@ -32,6 +32,55 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
     const normalizeWorldNames = (names) =>
         [...new Set((Array.isArray(names) ? names : []).map(x => String(x || '').trim()).filter(Boolean))];
 
+    const parseRegexFromSettingLine = (line) => {
+        const text = String(line || '').trim();
+        if (!text) return null;
+
+        // Support `/pattern/flags` form
+        const literalMatch = text.match(/^\/([\s\S]+)\/([a-z]*)$/i);
+        if (literalMatch) {
+            try {
+                return new RegExp(literalMatch[1], literalMatch[2] || 'g');
+            } catch (e) {
+                console.warn('[剧情优化大师] 世界书剔除正则解析失败（regex literal）:', text, e);
+                return null;
+            }
+        }
+
+        // Otherwise treat as a pattern with default `g`.
+        try {
+            return new RegExp(text, 'g');
+        } catch (e) {
+            console.warn('[剧情优化大师] 世界书剔除正则解析失败（pattern）:', text, e);
+            return null;
+        }
+    };
+
+    const stripConfiguredWorldInfoContent = (rawWorldInfoString) => {
+        let text = String(rawWorldInfoString || '');
+        if (!text) return '';
+
+        if (!apiSettings?.worldbookStripEnabled) {
+            return text;
+        }
+
+        const patternsValue = apiSettings.worldbookStripPatterns;
+        const lines = Array.isArray(patternsValue)
+            ? patternsValue
+            : String(patternsValue || '').split('\n');
+
+        for (const line of lines) {
+            const regex = parseRegexFromSettingLine(line);
+            if (!regex) continue;
+            text = text.replace(regex, '\n');
+        }
+
+        // Cleanup excessive blank lines after removals
+        text = text.replace(/\r\n/g, '\n');
+        text = text.replace(/\n{3,}/g, '\n\n').trim();
+        return text;
+    };
+
     try {
         let bookNames = [];
         
@@ -236,13 +285,14 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
         };
 
         const officialContent = await tryGetWorldbookContentViaOfficialWI();
-        if (typeof officialContent === 'string' && officialContent.trim().length > 0) {
+        if (typeof officialContent === 'string') {
+            const stripped = stripConfiguredWorldInfoContent(officialContent);
             const limit = apiSettings.worldbookCharLimit !== undefined ? apiSettings.worldbookCharLimit : 60000;
-            if (limit > 0 && officialContent.length > limit) {
-                console.log(`[剧情优化大师] 世界书内容 (${officialContent.length} chars) 超出限制 (${limit} chars)，将被截断。`);
-                return officialContent.substring(0, limit);
+            if (limit > 0 && stripped.length > limit) {
+                console.log(`[剧情优化大师] 世界书内容 (${stripped.length} chars) 超出限制 (${limit} chars)，将被截断。`);
+                return stripped.substring(0, limit);
             }
-            return officialContent;
+            return stripped;
         }
 
         let allEntries = [];
@@ -315,7 +365,7 @@ export async function getCombinedWorldbookContent(context, apiSettings, userMess
         const finalContent = Array.from(triggeredEntries).map(entry => entry.content).filter(Boolean);
         if (finalContent.length === 0) return '';
 
-        const combinedContent = finalContent.join('\n\n---\n\n');
+        const combinedContent = stripConfiguredWorldInfoContent(finalContent.join('\n\n---\n\n'));
         
         // [修复] 支持设为0来禁用字符限制
         const limit = apiSettings.worldbookCharLimit !== undefined 

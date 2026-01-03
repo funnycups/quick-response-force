@@ -1213,6 +1213,8 @@ function loadSettings(panel) {
     panel.find('#qrf_frequency_penalty').val(apiSettings.frequencyPenalty);
     panel.find('#qrf_context_turn_count').val(apiSettings.contextTurnCount);
     panel.find('#qrf_worldbook_char_limit').val(apiSettings.worldbookCharLimit);
+    panel.find('#qrf_worldbook_strip_enabled').prop('checked', apiSettings.worldbookStripEnabled ?? true);
+    panel.find('#qrf_worldbook_strip_patterns').val(apiSettings.worldbookStripPatterns || '');
 
     // [新增] 加载关键词和重试次数设置
     panel.find('#qrf_required_keywords').val(apiSettings.requiredKeywords || '');
