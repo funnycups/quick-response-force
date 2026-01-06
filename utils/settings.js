@@ -22,6 +22,7 @@ export const defaultSettings = {
     jailbreakPrompts: [], // Jailbreak提示词管理器
     apiSettings: {
         apiMode: 'frontend', // 'backend', 'frontend', 'google', 'tavern'
+        useStreaming: true, // 前端直连/Google直连是否使用流式传输(SSE)
         apiUrl: '',
         apiKey: '',
         model: 'gpt-4-turbo',

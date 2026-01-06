@@ -26,7 +26,10 @@ async function fetchWithStreamAndTimeout(url, options, isGoogleApi = false) {
     };
     
     if (streamOptions.body) {
-        streamOptions.body.stream = true;
+        // OpenAI兼容接口需要在payload里声明stream=true；Google接口通过不同endpoint控制是否流式
+        if (!isGoogleApi) {
+            streamOptions.body.stream = true;
+        }
         streamOptions.body = JSON.stringify(streamOptions.body);
     }
     
@@ -137,6 +140,39 @@ function withTimeout(promise, timeoutMs, errorMessage = '请求超时') {
     ]);
 }
 
+/**
+ * 非流式fetch JSON（带超时、错误信息补全）
+ * @param {string} url
+ * @param {RequestInit} options
+ * @param {number} timeoutMs
+ * @param {string} timeoutMessage
+ * @returns {Promise<any>}
+ */
+async function fetchJsonWithTimeout(url, options, timeoutMs = 60000, timeoutMessage = '请求超时') {
+    const fetchPromise = (async () => {
+        const response = await fetch(url, options);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            return await response.json();
+        }
+
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch {
+            return text;
+        }
+    })();
+
+    return withTimeout(fetchPromise, timeoutMs, timeoutMessage);
+}
+
 // 导出流式处理函数供其他模块使用
 export { fetchWithStreamAndTimeout };
 
@@ -242,6 +278,7 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
         ? apiSettings.requiredKeywords.split(',').map(kw => kw.trim()).filter(kw => kw.length > 0)
         : [];
     const maxRetries = apiSettings.maxRetries || 3;
+    const useStreaming = apiSettings.useStreaming !== false;
 
     /**
      * [新功能] 验证响应是否包含所有必需的关键词
@@ -498,7 +535,10 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
 
             if (isGoogleMode) {
                 const apiVersion = 'v1beta';
-                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+                const baseUrl = apiUrl.replace(/\/$/, '');
+                finalApiUrl = useStreaming
+                    ? `${baseUrl}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
+                    : `${baseUrl}/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
                 body = JSON.stringify(buildGoogleRequest(messages, apiSettings));
             } else { // 'frontend' mode
                 headers['Authorization'] = `Bearer ${apiKey}`;
@@ -514,21 +554,34 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                     top_p: apiSettings.top_p,
                     presence_penalty: apiSettings.presence_penalty,
                     frequency_penalty: apiSettings.frequency_penalty,
-                    stream: true,
+                    stream: useStreaming,
                 });
             }
 
-            console.log(`[${extensionName}] 准备通过前端直连发送流式请求至 ${finalApiUrl}`);
+            console.log(`[${extensionName}] 准备通过前端直连发送${useStreaming ? '流式' : '非流式'}请求至 ${finalApiUrl}`);
 
             try {
-                const content = await fetchWithStreamAndTimeout(finalApiUrl, { method: 'POST', headers, body }, isGoogleMode);
-                result = { content };
+                if (useStreaming) {
+                    const content = await fetchWithStreamAndTimeout(finalApiUrl, { method: 'POST', headers, body }, isGoogleMode);
+                    result = { content };
+                } else {
+                    const json = await fetchJsonWithTimeout(
+                        finalApiUrl,
+                        { method: 'POST', headers, body },
+                        60000,
+                        '前端直连请求超时（60秒）'
+                    );
+
+                    result = isGoogleMode
+                        ? normalizeApiResponse(parseGoogleResponse(json))
+                        : normalizeApiResponse(json);
+                }
             } catch (error) {
                 console.error(`[${extensionName}] 通过前端直连调用API时出错:`, error);
                 
                 // 检查是否为超时错误
                 if (error.message.includes('超时')) {
-                    toastr.error(`流式请求超时: ${error.message}`, 'API超时');
+                    toastr.error(`${useStreaming ? '流式' : '非流式'}请求超时: ${error.message}`, 'API超时');
                 } else {
                     toastr.error('前端直连API请求失败，请检查CORS设置及控制台日志。', 'API错误');
                 }
@@ -772,6 +825,8 @@ export async function testApiConnection(apiSettings) {
             );
             result = normalizeApiResponse(rawResponse);
         } else { // 'frontend' or 'google'
+            const useStreaming = apiSettings.useStreaming !== false;
+
             let finalApiUrl;
             let body;
             let headers = { 'Content-Type': 'application/json' };
@@ -779,7 +834,10 @@ export async function testApiConnection(apiSettings) {
 
             if (isGoogleMode) {
                 const apiVersion = 'v1beta';
-                finalApiUrl = `${apiUrl.replace(/\/$/, '')}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+                const baseUrl = apiUrl.replace(/\/$/, '');
+                finalApiUrl = useStreaming
+                    ? `${baseUrl}/${apiVersion}/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`
+                    : `${baseUrl}/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
                 body = JSON.stringify(buildGoogleRequest(testMessages, { ...apiSettings, max_tokens: 5, temperature: 0.1 }));
             } else { // 'frontend'
                 headers['Authorization'] = `Bearer ${apiKey}`;
@@ -795,13 +853,28 @@ export async function testApiConnection(apiSettings) {
                     top_p: apiSettings.top_p,
                     presence_penalty: apiSettings.presence_penalty,
                     frequency_penalty: apiSettings.frequency_penalty,
-                    stream: true,
+                    stream: useStreaming,
                 });
             }
 
-            console.log(`[${extensionName}] 通过前端直连流式测试: ${finalApiUrl}`);
-            const content = await fetchWithStreamAndTimeout(finalApiUrl, { method: 'POST', headers, body }, isGoogleMode);
-            result = { content };
+            if (useStreaming) {
+                console.log(`[${extensionName}] 通过前端直连流式测试: ${finalApiUrl}`);
+                const content = await fetchWithStreamAndTimeout(finalApiUrl, { method: 'POST', headers, body }, isGoogleMode);
+                result = { content };
+            } else {
+                console.log(`[${extensionName}] 通过前端直连非流式测试: ${finalApiUrl}`);
+
+                const json = await fetchJsonWithTimeout(
+                    finalApiUrl,
+                    { method: 'POST', headers, body },
+                    30000,
+                    '前端直连测试超时（30秒）'
+                );
+
+                result = isGoogleMode
+                    ? normalizeApiResponse(parseGoogleResponse(json))
+                    : normalizeApiResponse(json);
+            }
         }
 
         if (result.error) {

@@ -1189,6 +1189,7 @@ function loadSettings(panel) {
 
     // 加载API和模型设置 (大部分是全局，但世界书相关是角色卡)
     panel.find(`input[name="qrf_api_mode"][value="${apiSettings.apiMode}"]`).prop('checked', true);
+    panel.find('#qrf_use_streaming').prop('checked', apiSettings.useStreaming ?? true);
     panel.find('#qrf_tavern_api_profile_select').val(apiSettings.tavernProfile); // 加载酒馆预设选择
     panel.find(`input[name="qrf_worldbook_source"][value="${apiSettings.worldbookSource || 'character'}"]`).prop('checked', true);
     panel.find('#qrf_worldbook_enabled').prop('checked', apiSettings.worldbookEnabled);

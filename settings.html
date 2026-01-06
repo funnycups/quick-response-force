@@ -91,6 +91,15 @@
             </div>
         </div>
 
+        <div class="qrf_settings_block">
+            <label for="qrf_use_streaming">流式传输</label>
+            <label class="toggle-switch">
+                <input id="qrf_use_streaming" type="checkbox" />
+                <span class="slider"></span>
+            </label>
+            <small class="notes">开启后使用SSE流式请求(当前仅对“前端直连(OpenAI兼容)”与“Google AI Studio(前端)”生效)。关闭后使用非流式请求(一次性返回)。</small>
+        </div>
+
         <div id="qrf_tavern_api_profile_block" class="qrf_settings_block" style="display: none;">
             <label for="qrf_tavern_api_profile_select">酒馆连接预设</label>
             <div class="qrf_model_selector_wrapper">
