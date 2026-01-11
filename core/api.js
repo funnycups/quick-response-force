@@ -148,7 +148,7 @@ function withTimeout(promise, timeoutMs, errorMessage = '请求超时') {
  * @param {string} timeoutMessage
  * @returns {Promise<any>}
  */
-async function fetchJsonWithTimeout(url, options, timeoutMs = 60000, timeoutMessage = '请求超时') {
+async function fetchJsonWithTimeout(url, options, timeoutMs = 120000, timeoutMessage = '请求超时') {
     const fetchPromise = (async () => {
         const response = await fetch(url, options);
 
@@ -243,11 +243,11 @@ async function callApiViaBackend(apiSettings, messages) {
             data: JSON.stringify(request),
         });
         
-        // 添加60秒总超时（后端代理模式允许更长时间）
+        // 添加120秒总超时（后端代理模式允许更长时间）
         const result = await withTimeout(
             ajaxPromise,
-            60000,
-            '后端代理请求超时（60秒）'
+            120000,
+            '后端代理请求超时（120秒）'
         );
         
         return normalizeApiResponse(result);
@@ -463,8 +463,8 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                 
                 responsePromise = withTimeout(
                     requestPromise,
-                    60000,
-                    '酒馆连接请求超时（60秒）'
+                    120000,
+                    '酒馆连接请求超时（120秒）'
                 );
 
             } catch (error) {
@@ -505,11 +505,11 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                     apiSettings.max_tokens,
                 );
                 
-                // 添加60秒超时
+                // 添加120秒超时
                 result = await withTimeout(
                     requestPromise,
-                    60000,
-                    '完美模式请求超时（60秒）'
+                    120000,
+                    '完美模式请求超时（120秒）'
                 );
             } catch (error) {
                 console.error(`[${extensionName}] 完美模式调用失败:`, error);
@@ -568,8 +568,8 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                     const json = await fetchJsonWithTimeout(
                         finalApiUrl,
                         { method: 'POST', headers, body },
-                        60000,
-                        '前端直连请求超时（60秒）'
+                        120000,
+                        '前端直连请求超时（120秒）'
                     );
 
                     result = isGoogleMode
