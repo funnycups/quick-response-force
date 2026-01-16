@@ -385,8 +385,8 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
             corePromptMessages.push({ role: 'user', content: replacePlaceholders(apiSettings.systemPrompt) });
         }
 
-        // 处理 jailbreak 提示词
-        const jailbreakPrompts = globalSettings?.jailbreakPrompts || [];
+        // 处理 jailbreak 提示词（支持单条开关，默认启用）
+        const jailbreakPrompts = (globalSettings?.jailbreakPrompts || []).filter(p => p?.enabled !== false);
         const messages = [];
 
         // 用于标记是否已插入核心提示词

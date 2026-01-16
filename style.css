@@ -359,6 +359,29 @@
     gap: 8px;
 }
 
+.qrf_jailbreak_prompt_item .qrf_jb_header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.qrf_jailbreak_prompt_item .qrf_jb_enabled_label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    cursor: pointer;
+}
+
+.qrf_jailbreak_prompt_item.qrf_jb_disabled {
+    opacity: 0.45;
+}
+
+.qrf_jailbreak_prompt_item.qrf_jb_disabled:hover {
+    opacity: 0.6;
+}
+
 .qrf_jailbreak_prompt_item .qrf_jb_role_select {
     width: 120px;
     padding: 6px;

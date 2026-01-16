@@ -1104,7 +1104,11 @@ function loadJailbreakPrompts(panel) {
     container.empty();
     
     jailbreakPrompts.forEach((prompt, index) => {
-        const item = createJailbreakPromptItem(prompt, index);
+        const normalizedPrompt = {
+            ...prompt,
+            enabled: prompt?.enabled !== false,
+        };
+        const item = createJailbreakPromptItem(normalizedPrompt, index);
         container.append(item);
     });
 }
@@ -1117,20 +1121,27 @@ function loadJailbreakPrompts(panel) {
  */
 function createJailbreakPromptItem(prompt, index) {
     const isPlaceholder = prompt.content === '$CORE_PROMPTS';
+    const isEnabled = prompt?.enabled !== false;
     
     const item = $(`
-        <div class="qrf_jailbreak_prompt_item" data-index="${index}">
+        <div class="qrf_jailbreak_prompt_item ${isEnabled ? '' : 'qrf_jb_disabled'}" data-index="${index}">
             <div class="qrf_jb_drag_handle" title="拖动排序">
                 <i class="fa-solid fa-grip-vertical"></i>
             </div>
             <div class="qrf_jb_content">
-                ${!isPlaceholder ? `
-                <select class="qrf_jb_role_select">
-                    <option value="system" ${prompt.role === 'system' ? 'selected' : ''}>System</option>
-                    <option value="user" ${prompt.role === 'user' ? 'selected' : ''}>User</option>
-                    <option value="assistant" ${prompt.role === 'assistant' ? 'selected' : ''}>Assistant</option>
-                </select>
-                ` : '<strong style="color: #2196F3;">$CORE_PROMPTS 占位符</strong>'}
+                <div class="qrf_jb_header">
+                    <label class="qrf_jb_enabled_label" title="开关此提示词（关闭后不会发送）">
+                        <input type="checkbox" class="qrf_jb_enabled" ${isEnabled ? 'checked' : ''} />
+                        启用
+                    </label>
+                    ${!isPlaceholder ? `
+                    <select class="qrf_jb_role_select">
+                        <option value="system" ${prompt.role === 'system' ? 'selected' : ''}>System</option>
+                        <option value="user" ${prompt.role === 'user' ? 'selected' : ''}>User</option>
+                        <option value="assistant" ${prompt.role === 'assistant' ? 'selected' : ''}>Assistant</option>
+                    </select>
+                    ` : '<strong style="color: #2196F3;">$CORE_PROMPTS 占位符</strong>'}
+                </div>
                 <textarea class="qrf_jb_textarea" placeholder="${isPlaceholder ? '核心提示词将在此位置插入' : '输入提示词内容...'}" ${isPlaceholder ? 'readonly' : ''}>${prompt.content || ''}</textarea>
             </div>
             <div class="qrf_jb_actions">
@@ -1161,12 +1172,13 @@ function saveJailbreakPrompts(panel) {
     container.find('.qrf_jailbreak_prompt_item').each(function() {
         const item = $(this);
         const content = item.find('.qrf_jb_textarea').val();
+        const enabled = item.find('.qrf_jb_enabled').prop('checked');
         
         if (content === '$CORE_PROMPTS') {
-            prompts.push({ content: '$CORE_PROMPTS' });
+            prompts.push({ content: '$CORE_PROMPTS', enabled });
         } else {
             const role = item.find('.qrf_jb_role_select').val() || 'system';
-            prompts.push({ role, content });
+            prompts.push({ role, content, enabled });
         }
     });
     
@@ -1633,7 +1645,7 @@ export function initializeBindings() {
         try {
             const container = panel.find('#qrf_jailbreak_prompts_container');
             console.log('[QRF] Container found:', container.length);
-            const newPrompt = { role: 'system', content: '' };
+            const newPrompt = { role: 'system', content: '', enabled: true };
             const index = container.find('.qrf_jailbreak_prompt_item').length;
             console.log('[QRF] Creating item at index:', index);
             const item = createJailbreakPromptItem(newPrompt, index);
@@ -1658,7 +1670,7 @@ export function initializeBindings() {
             return;
         }
         
-        const newPrompt = { content: '$CORE_PROMPTS' };
+        const newPrompt = { content: '$CORE_PROMPTS', enabled: true };
         const index = container.find('.qrf_jailbreak_prompt_item').length;
         const item = createJailbreakPromptItem(newPrompt, index);
         container.append(item);
@@ -1701,6 +1713,13 @@ export function initializeBindings() {
     
     // 角色选择变化
     panel.on('change.qrf', '.qrf_jb_role_select', function() {
+        saveJailbreakPrompts(panel);
+    });
+
+    // 启用开关变化
+    panel.on('change.qrf', '.qrf_jb_enabled', function() {
+        const item = $(this).closest('.qrf_jailbreak_prompt_item');
+        item.toggleClass('qrf_jb_disabled', !$(this).prop('checked'));
         saveJailbreakPrompts(panel);
     });
     
