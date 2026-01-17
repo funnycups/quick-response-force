@@ -220,12 +220,16 @@
                 <button class="menu_button" type="button" data-qrf-insert-placeholder="$5" title="插入“总体大纲”表内容占位符">$5 总体大纲表</button>
                 <button class="menu_button" type="button" data-qrf-insert-placeholder="$6" title="插入上一轮剧情规划数据占位符">$6 上轮规划</button>
                 <button class="menu_button" type="button" data-qrf-insert-placeholder="$7" title="插入本次实际读取的前文上下文占位符">$7 前文上下文</button>
+                <button class="menu_button" type="button" data-qrf-insert-placeholder="$U" title="插入用户设定描述占位符">$U 用户设定</button>
+                <button class="menu_button" type="button" data-qrf-insert-placeholder="$C" title="插入角色描述占位符">$C 角色描述</button>
             </div>
             <small class="notes" style="display: block; margin-top: 10px;">
                 <code>$1</code>：世界书内容（默认开启注入）<br>
                 <code>$5</code>：“总体大纲”表内容（含表头）<br>
                 <code>$6</code>：上一轮保存的剧情规划数据<br>
-                <code>$7</code>：本次实际读取的前文上下文（AI上下文 + 本次用户输入，格式化后注入）
+                <code>$7</code>：本次实际读取的前文上下文（AI上下文 + 本次用户输入，格式化后注入）<br>
+                <code>$U</code>：用户设定描述（persona_description）<br>
+                <code>$C</code>：当前角色描述（char_description）
             </small>
         </fieldset>
 

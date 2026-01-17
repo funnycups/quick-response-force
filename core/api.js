@@ -3,6 +3,7 @@
 import { getContext } from '/scripts/extensions.js';
 import { getRequestHeaders } from '/script.js';
 import { buildGoogleRequest, parseGoogleResponse } from '../utils/googleAdapter.js';
+import { getPromptPlaceholderReplacements } from '../utils/promptPlaceholders.js';
 
 const extensionName = 'quick-response-force';
 
@@ -328,6 +329,8 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
             fullHistory.push({ role: 'user', content: userMessage });
         }
 
+        const ucReplacements = getPromptPlaceholderReplacements(getContext());
+
         const sanitizeHtml = (htmlString) => {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = htmlString;
@@ -365,6 +368,12 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
 
             // 替换 $7 为本次实际读取的前文上下文（AI上下文 + 本次用户输入，格式化后注入）
             text = text.replace(/(?<!\\)\$7/g, formattedHistoryInjection);
+
+            // 替换 $U 为用户设定描述（persona_description）
+            text = text.replace(/(?<!\\)\$U/g, ucReplacements.$U);
+
+            // 替换 $C 为角色描述（char_description）
+            text = text.replace(/(?<!\\)\$C/g, ucReplacements.$C);
 
             return text;
         };

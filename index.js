@@ -8,6 +8,7 @@ import { createDrawer } from './ui/drawer.js';
 import { callInterceptionApi } from './core/api.js';
 import { getCombinedWorldbookContent } from './core/lore.js';
 import { defaultSettings } from './utils/settings.js';
+import { getPromptPlaceholderReplacements } from './utils/promptPlaceholders.js';
 
 const extension_name = 'quick-response-force';
 let isProcessing = false;
@@ -280,6 +281,7 @@ async function runOptimizationLogic(userMessage, generationType = 'normal') {
 
         // [架构重构] 读取上一轮优化结果，用于$6占位符
         const lastPlotContent = getPlotFromHistory();
+        const ucReplacements = getPromptPlaceholderReplacements(context);
 
         let tableDataContent = '';
         try {
@@ -301,6 +303,8 @@ async function runOptimizationLogic(userMessage, generationType = 'normal') {
             'sulv4': apiSettings.rateCuckold,
             '$5': tableDataContent,
             '$6': lastPlotContent, // [新增] 添加$6占位符及其内容
+            '$U': ucReplacements.$U,
+            '$C': ucReplacements.$C,
         };
 
         const processedPrompts = {
