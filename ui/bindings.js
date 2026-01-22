@@ -5,6 +5,7 @@ import { extension_settings, getContext } from '/scripts/extensions.js';
 import { characters, this_chid, getRequestHeaders, saveSettingsDebounced, saveSettings as saveSettingsImmediate } from '/script.js';
 import { eventSource, event_types } from '/script.js';
 import { extensionName, defaultSettings } from '../utils/settings.js';
+import { pruneQrfPlotHistory } from '../utils/plotRetention.js';
 import { fetchModels, testApiConnection } from '../core/api.js';
 
 /**
@@ -1052,6 +1053,12 @@ $('#qrf_analysis_content').text(latestPlot);
             // 更新聊天记录中的数据
             context.chat[messageIndex].qrf_plot = newContent;
             latestPlot = newContent;
+
+            const retention = extension_settings[extensionName]?.apiSettings?.plotRetentionCount ?? 0;
+            const removed = pruneQrfPlotHistory(context.chat, retention);
+            if (removed > 0) {
+                console.log(`[${extensionName}] Pruned ${removed} old plot(s) from chat history (keep ${retention})`);
+            }
             
             // 触发聊天保存
             try {
@@ -1225,6 +1232,7 @@ function loadSettings(panel) {
     panel.find('#qrf_presence_penalty').val(apiSettings.presencePenalty);
     panel.find('#qrf_frequency_penalty').val(apiSettings.frequencyPenalty);
     panel.find('#qrf_context_turn_count').val(apiSettings.contextTurnCount);
+    panel.find('#qrf_plot_retention_count').val(apiSettings.plotRetentionCount ?? 0);
     panel.find('#qrf_worldbook_char_limit').val(apiSettings.worldbookCharLimit);
     panel.find('#qrf_worldbook_strip_enabled').prop('checked', apiSettings.worldbookStripEnabled ?? true);
     panel.find('#qrf_worldbook_strip_patterns').val(apiSettings.worldbookStripPatterns || '');

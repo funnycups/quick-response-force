@@ -33,6 +33,7 @@ export const defaultSettings = {
         presencePenalty: 1,
         frequencyPenalty: 1,
         contextTurnCount: 3,
+        plotRetentionCount: 0, // [新功能] 仅保留最近N次的剧情规划数据(qrf_plot)，0表示不清理
         extractTags: '', // [新功能] 标签摘取
         excludeTags: '', // [新功能] 标签排除（在提取前先排除）
         worldbookEnabled: true,

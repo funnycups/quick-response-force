@@ -9,6 +9,7 @@ import { callInterceptionApi } from './core/api.js';
 import { getCombinedWorldbookContent } from './core/lore.js';
 import { defaultSettings } from './utils/settings.js';
 import { getPromptPlaceholderReplacements } from './utils/promptPlaceholders.js';
+import { pruneQrfPlotHistory } from './utils/plotRetention.js';
 
 const extension_name = 'quick-response-force';
 let isProcessing = false;
@@ -201,6 +202,12 @@ async function handlePendingPlot(index) {
         if (message && message.is_user) {
             message.qrf_plot = window._qrf_pending_plot;
             console.log(`[${extension_name}] Pending plot stored in user message ${index}`);
+
+            const retention = extension_settings[extension_name]?.apiSettings?.plotRetentionCount ?? 0;
+            const removed = pruneQrfPlotHistory(context.chat, retention);
+            if (removed > 0) {
+                console.log(`[${extension_name}] Pruned ${removed} old plot(s) from chat history (keep ${retention})`);
+            }
         }
         
         // 清空临时变量
@@ -500,6 +507,12 @@ async function onGenerationAfterCommands(type, params, dryRun) {
                         if (plot) {
                             lastMessage.qrf_plot = plot;
                             console.log(`[${extension_name}] Plot stored in user message ${lastMessageIndex}`);
+
+                            const retention = settings.apiSettings?.plotRetentionCount ?? 0;
+                            const removed = pruneQrfPlotHistory(context.chat, retention);
+                            if (removed > 0) {
+                                console.log(`[${extension_name}] Pruned ${removed} old plot(s) from chat history (keep ${retention})`);
+                            }
                         }
                         
                         // [UI修复] 发送消息更新事件以刷新UI
