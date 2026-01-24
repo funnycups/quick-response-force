@@ -847,7 +847,7 @@ function importPromptPresets(file, panel) {
                 promptMode: 'jailbreak',
                 mainPrompt: '',
                 systemPrompt: '',
-                finalSystemDirective: '',
+                finalSystemDirective: preset.finalSystemDirective ?? '',
                 rateMain: preset.rateMain ?? 1.0,
                 ratePersonal: preset.ratePersonal ?? 1.0,
                 rateErotic: preset.rateErotic ?? 1.0,
@@ -1148,9 +1148,9 @@ $('#qrf_analysis_content').text(latestPlot);
  * 加载 jailbreak 提示词到UI
  * @param {JQuery} panel - 设置面板的jQuery对象
  */
-function loadJailbreakPrompts(panel) {
+function loadJailbreakPrompts(panel, promptsOverride = null) {
     const container = panel.find('#qrf_jailbreak_prompts_container');
-    const jailbreakPrompts = extension_settings[extensionName]?.jailbreakPrompts || [];
+    const jailbreakPrompts = promptsOverride !== null ? promptsOverride : (extension_settings[extensionName]?.jailbreakPrompts || []);
     
     container.empty();
     
@@ -1654,7 +1654,7 @@ export function initializeBindings() {
 
             const nextJailbreakPrompts = Array.isArray(selectedPreset.jailbreakPrompts) ? selectedPreset.jailbreakPrompts : [];
             await saveSetting('jailbreakPrompts', nextJailbreakPrompts);
-            loadJailbreakPrompts(panel);
+            loadJailbreakPrompts(panel, nextJailbreakPrompts);
 
             for (const [key, value] of Object.entries(presetData)) {
                 await saveSetting(key, value);
