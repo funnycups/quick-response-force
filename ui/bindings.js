@@ -838,22 +838,26 @@ function importPromptPresets(file, panel) {
                     enabled: true
                 }));
             
+            const extractTags = preset.extractTags ?? preset.contextExtractTags ?? '';
+            const excludeTags = preset.excludeTags ?? preset.contextExcludeTags ?? '';
+            const maxRetries = preset.maxRetries ?? preset.loopSettings?.maxRetries ?? 3;
+            
             return {
                 name: preset.name,
                 promptMode: 'jailbreak',
                 mainPrompt: '',
                 systemPrompt: '',
                 finalSystemDirective: '',
-                rateMain: 1.0,
-                ratePersonal: 1.0,
-                rateErotic: 1.0,
-                rateCuckold: 1.0,
-                excludeTags: '',
-                extractTags: '',
-                minLength: defaultSettings.minLength,
-                contextTurnCount: defaultSettings.apiSettings.contextTurnCount,
-                requiredKeywords: '',
-                maxRetries: 3,
+                rateMain: preset.rateMain ?? 1.0,
+                ratePersonal: preset.ratePersonal ?? 1.0,
+                rateErotic: preset.rateErotic ?? 1.0,
+                rateCuckold: preset.rateCuckold ?? 1.0,
+                excludeTags,
+                extractTags,
+                minLength: preset.minLength ?? defaultSettings.minLength,
+                contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount,
+                requiredKeywords: preset.requiredKeywords ?? '',
+                maxRetries,
                 jailbreakPrompts
             };
         }
