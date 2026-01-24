@@ -158,9 +158,30 @@
 
     <fieldset class="settings-group">
         <legend><i class="fas fa-shield-alt"></i> Jailbreak 提示词管理器</legend>
-        <small class="notes" style="display: block; margin-bottom: 10px;">
-            管理在核心提示词前后插入的自定义提示词。使用 <code>$CORE_PROMPTS</code> 占位符来指定核心提示词的插入位置。
-        </small>
+        
+        <div class="qrf_settings_block_radio">
+            <label>提示词模式</label>
+            <div class="qrf_radio_group">
+                <div class="qrf_radio_option">
+                    <input type="radio" id="qrf_prompt_mode_classic" name="qrf_prompt_mode" value="classic" checked>
+                    <label for="qrf_prompt_mode_classic">传统模式（三段式提示词 + JB包装）</label>
+                </div>
+                <div class="qrf_radio_option">
+                    <input type="radio" id="qrf_prompt_mode_jailbreak" name="qrf_prompt_mode" value="jailbreak">
+                    <label for="qrf_prompt_mode_jailbreak">纯 JB 模式（完全使用下方提示词列表）</label>
+                </div>
+            </div>
+            <small class="notes">
+                <strong>传统模式</strong>：使用"主系统提示词"、"拦截任务详细指令"、"最终注入指令"三段式，Jailbreak管理器用于在核心提示词前后添加额外内容。<br>
+                <strong>纯 JB 模式</strong>：完全不使用三段式提示词，所有提示词内容都在下方列表中直接配置。
+            </small>
+        </div>
+
+        <div id="qrf_classic_mode_hint" class="qrf_settings_block" style="display: none;">
+            <small class="notes" style="display: block; margin-bottom: 10px;">
+                管理在核心提示词前后插入的自定义提示词。使用 <code>$CORE_PROMPTS</code> 占位符来指定核心提示词的插入位置。
+            </small>
+        </div>
         
         <div class="qrf_settings_block">
             <div class="qrf_label_with_controls_wrapper">
@@ -238,6 +259,7 @@
             </small>
         </fieldset>
 
+        <div id="qrf_classic_prompts_wrapper">
         <div class="qrf_settings_block">
             <div class="qrf_label_with_button_wrapper">
                 <label for="qrf_main_prompt">主系统提示词 (通用)</label>
@@ -261,6 +283,7 @@
             </div>
             <textarea id="qrf_final_system_directive" class="text_pole" rows="4"></textarea>
             <small class="notes">这段指令将与用户的输入和生成的`<plot>`模块组合，最终发送给酒馆AI。</small>
+        </div>
         </div>
     </fieldset>
 

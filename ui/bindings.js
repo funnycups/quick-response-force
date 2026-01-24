@@ -648,9 +648,12 @@ function saveAsNewPreset(panel) {
 
     const presets = extension_settings[extensionName]?.promptPresets || [];
     const existingPresetIndex = presets.findIndex(p => p.name === presetName);
+    
+    const currentPromptMode = panel.find('input[name="qrf_prompt_mode"]:checked').val() || 'classic';
 
     const newPresetData = {
         name: presetName,
+        promptMode: currentPromptMode,
         mainPrompt: panel.find('#qrf_main_prompt').val(),
         systemPrompt: panel.find('#qrf_system_prompt').val(),
         finalSystemDirective: panel.find('#qrf_final_system_directive').val(),
@@ -658,13 +661,13 @@ function saveAsNewPreset(panel) {
         ratePersonal: parseFloat(panel.find('#qrf_rate_personal').val()),
         rateErotic: parseFloat(panel.find('#qrf_rate_erotic').val()),
         rateCuckold: parseFloat(panel.find('#qrf_rate_cuckold').val()),
-        // [新功能] 导出时包含新增的设置
         excludeTags: panel.find('#qrf_exclude_tags').val(),
         extractTags: panel.find('#qrf_extract_tags').val(),
         minLength: parseInt(panel.find('#qrf_min_length').val(), 10),
         contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10),
         requiredKeywords: panel.find('#qrf_required_keywords').val(),
-        maxRetries: parseInt(panel.find('#qrf_max_retries').val(), 10)
+        maxRetries: parseInt(panel.find('#qrf_max_retries').val(), 10),
+        jailbreakPrompts: collectJailbreakPrompts(panel)
     };
 
     if (existingPresetIndex !== -1) {
@@ -715,8 +718,11 @@ function overwriteSelectedPreset(panel) {
         return;
     }
     
+    const currentPromptMode = panel.find('input[name="qrf_prompt_mode"]:checked').val() || 'classic';
+    
     const updatedPresetData = {
         name: selectedName,
+        promptMode: currentPromptMode,
         mainPrompt: panel.find('#qrf_main_prompt').val(),
         systemPrompt: panel.find('#qrf_system_prompt').val(),
         finalSystemDirective: panel.find('#qrf_final_system_directive').val(),
@@ -724,13 +730,13 @@ function overwriteSelectedPreset(panel) {
         ratePersonal: parseFloat(panel.find('#qrf_rate_personal').val()),
         rateErotic: parseFloat(panel.find('#qrf_rate_erotic').val()),
         rateCuckold: parseFloat(panel.find('#qrf_rate_cuckold').val()),
-        // [新功能] 覆盖时包含新增的设置
         excludeTags: panel.find('#qrf_exclude_tags').val(),
         extractTags: panel.find('#qrf_extract_tags').val(),
         minLength: parseInt(panel.find('#qrf_min_length').val(), 10),
         contextTurnCount: parseInt(panel.find('#qrf_context_turn_count').val(), 10),
         requiredKeywords: panel.find('#qrf_required_keywords').val(),
-        maxRetries: parseInt(panel.find('#qrf_max_retries').val(), 10)
+        maxRetries: parseInt(panel.find('#qrf_max_retries').val(), 10),
+        jailbreakPrompts: collectJailbreakPrompts(panel)
     };
 
     presets[existingPresetIndex] = updatedPresetData;
@@ -823,6 +829,35 @@ function importPromptPresets(file, panel) {
         if (!preset || typeof preset !== 'object') return null;
         if (typeof preset.name !== 'string' || preset.name.trim().length === 0) return null;
 
+        if (Array.isArray(preset.promptGroup)) {
+            const jailbreakPrompts = preset.promptGroup
+                .filter(item => item && typeof item === 'object')
+                .map(item => ({
+                    role: (item.role || 'system').toLowerCase(),
+                    content: item.content || '',
+                    enabled: true
+                }));
+            
+            return {
+                name: preset.name,
+                promptMode: 'jailbreak',
+                mainPrompt: '',
+                systemPrompt: '',
+                finalSystemDirective: '',
+                rateMain: 1.0,
+                ratePersonal: 1.0,
+                rateErotic: 1.0,
+                rateCuckold: 1.0,
+                excludeTags: '',
+                extractTags: '',
+                minLength: defaultSettings.minLength,
+                contextTurnCount: defaultSettings.apiSettings.contextTurnCount,
+                requiredKeywords: '',
+                maxRetries: 3,
+                jailbreakPrompts
+            };
+        }
+
         const promptMap = {};
         if (Array.isArray(preset.prompts)) {
             for (const prompt of preset.prompts) {
@@ -839,6 +874,7 @@ function importPromptPresets(file, panel) {
 
         return {
             name: preset.name,
+            promptMode: preset.promptMode || 'classic',
             mainPrompt: promptMap.mainPrompt ?? preset.mainPrompt ?? '',
             systemPrompt: promptMap.systemPrompt ?? preset.systemPrompt ?? '',
             finalSystemDirective: promptMap.finalSystemDirective ?? preset.finalSystemDirective ?? '',
@@ -852,6 +888,7 @@ function importPromptPresets(file, panel) {
             contextTurnCount: preset.contextTurnCount ?? defaultSettings.apiSettings.contextTurnCount,
             requiredKeywords: preset.requiredKeywords ?? '',
             maxRetries,
+            jailbreakPrompts: preset.jailbreakPrompts
         };
     }
 
@@ -860,13 +897,16 @@ function importPromptPresets(file, panel) {
         try {
             const importedPresets = JSON.parse(e.target.result);
 
-            const presetList = Array.isArray(importedPresets)
-                ? importedPresets
-                : (importedPresets?.promptPresets && Array.isArray(importedPresets.promptPresets))
-                    ? importedPresets.promptPresets
-                    : null;
-
-            if (!presetList) throw new Error('JSON文件格式不正确，根节点必须是数组（或包含 promptPresets 数组）。');
+            let presetList;
+            if (Array.isArray(importedPresets)) {
+                presetList = importedPresets;
+            } else if (importedPresets?.promptPresets && Array.isArray(importedPresets.promptPresets)) {
+                presetList = importedPresets.promptPresets;
+            } else if (importedPresets?.name && (importedPresets?.promptGroup || importedPresets?.prompts || importedPresets?.mainPrompt !== undefined)) {
+                presetList = [importedPresets];
+            } else {
+                throw new Error('JSON文件格式不正确。支持的格式：数组、包含promptPresets数组的对象、或单个预设对象（包含name和promptGroup/prompts/mainPrompt）。');
+            }
 
             let currentPresets = extension_settings[extensionName]?.promptPresets || [];
             let importedCount = 0;
@@ -1193,6 +1233,47 @@ function saveJailbreakPrompts(panel) {
 }
 
 /**
+ * 根据提示词模式更新UI显示
+ * @param {JQuery} panel - 设置面板的jQuery对象
+ * @param {string} mode - 提示词模式 ('classic' | 'jailbreak')
+ */
+function updatePromptModeVisibility(panel, mode) {
+    const classicWrapper = panel.find('#qrf_classic_prompts_wrapper');
+    const classicHint = panel.find('#qrf_classic_mode_hint');
+    const corePlaceholderBtn = panel.find('#qrf_add_core_placeholder');
+    
+    if (mode === 'jailbreak') {
+        classicWrapper.hide();
+        classicHint.hide();
+        corePlaceholderBtn.hide();
+    } else {
+        classicWrapper.show();
+        classicHint.show();
+        corePlaceholderBtn.show();
+    }
+}
+
+function collectJailbreakPrompts(panel) {
+    const container = panel.find('#qrf_jailbreak_prompts_container');
+    const prompts = [];
+    
+    container.find('.qrf_jailbreak_prompt_item').each(function() {
+        const item = $(this);
+        const content = item.find('.qrf_jb_textarea').val();
+        const enabled = item.find('.qrf_jb_enabled').prop('checked');
+        
+        if (content === '$CORE_PROMPTS') {
+            prompts.push({ content: '$CORE_PROMPTS', enabled });
+        } else {
+            const role = item.find('.qrf_jb_role_select').val() || 'system';
+            prompts.push({ role, content, enabled });
+        }
+    });
+    
+    return prompts;
+}
+
+/**
  * 加载设置到UI界面。
  * @param {JQuery} panel - 设置面板的jQuery对象。
  */
@@ -1205,6 +1286,11 @@ function loadSettings(panel) {
     // 加载总开关 (全局)
     panel.find('#qrf_enabled').prop('checked', globalSettings.enabled);
     panel.find('#qrf_min_length').val(globalSettings.minLength ?? 500);
+
+    // 加载提示词模式 (全局)
+    const promptMode = globalSettings.promptMode || 'classic';
+    panel.find(`input[name="qrf_prompt_mode"][value="${promptMode}"]`).prop('checked', true);
+    updatePromptModeVisibility(panel, promptMode);
 
     // 加载API和模型设置 (大部分是全局，但世界书相关是角色卡)
     panel.find(`input[name="qrf_api_mode"][value="${apiSettings.apiMode}"]`).prop('checked', true);
@@ -1353,6 +1439,9 @@ export function initializeBindings() {
             updateApiUrlVisibility(panel, value);
             // [核心修复] 切换API模式时，清除所有旧的、非角色特定的API设置
             clearCharacterStaleSettings('api');
+        }
+        if (element.name === 'qrf_prompt_mode') {
+            updatePromptModeVisibility(panel, value);
         }
         if (element.name === 'qrf_worldbook_source') {
             updateWorldbookSourceVisibility(panel, value);
@@ -1523,8 +1612,10 @@ export function initializeBindings() {
         const selectedPreset = presets.find(p => p.name === selectedName);
 
         if (selectedPreset) {
-            // [增强] 当选择预设时，直接、原子性地更新UI和设置
+            const presetPromptMode = selectedPreset.promptMode || 'classic';
+            
             const presetData = {
+                promptMode: presetPromptMode,
                 mainPrompt: selectedPreset.mainPrompt,
                 systemPrompt: selectedPreset.systemPrompt,
                 finalSystemDirective: selectedPreset.finalSystemDirective,
@@ -1532,7 +1623,6 @@ export function initializeBindings() {
                 ratePersonal: selectedPreset.ratePersonal ?? 1.0,
                 rateErotic: selectedPreset.rateErotic ?? 1.0,
                 rateCuckold: selectedPreset.rateCuckold ?? 1.0,
-                 // [新功能] 加载预设时应用新设置
                 excludeTags: selectedPreset.excludeTags || '',
                 extractTags: selectedPreset.extractTags || '',
                 minLength: selectedPreset.minLength ?? defaultSettings.minLength,
@@ -1541,7 +1631,9 @@ export function initializeBindings() {
                 maxRetries: selectedPreset.maxRetries ?? 3
             };
 
-            // 1. 更新UI界面
+            panel.find(`input[name="qrf_prompt_mode"][value="${presetPromptMode}"]`).prop('checked', true);
+            updatePromptModeVisibility(panel, presetPromptMode);
+            
             panel.find('#qrf_main_prompt').val(presetData.mainPrompt);
             panel.find('#qrf_system_prompt').val(presetData.systemPrompt);
             panel.find('#qrf_final_system_directive').val(presetData.finalSystemDirective);
@@ -1556,8 +1648,10 @@ export function initializeBindings() {
             panel.find('#qrf_required_keywords').val(presetData.requiredKeywords);
             panel.find('#qrf_max_retries').val(presetData.maxRetries);
 
-            // 2. 直接、同步地覆盖apiSettings中的内容
-            // saveSetting现在是异步的，我们需要等待它完成
+            const nextJailbreakPrompts = Array.isArray(selectedPreset.jailbreakPrompts) ? selectedPreset.jailbreakPrompts : [];
+            await saveSetting('jailbreakPrompts', nextJailbreakPrompts);
+            loadJailbreakPrompts(panel);
+
             for (const [key, value] of Object.entries(presetData)) {
                 await saveSetting(key, value);
             }

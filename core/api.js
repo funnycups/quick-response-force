@@ -222,11 +222,11 @@ async function callApiViaBackend(apiSettings, messages) {
     const request = {
         messages,
         model: apiSettings.model,
-        max_tokens: apiSettings.max_tokens,
+        max_tokens: apiSettings.maxTokens,
         temperature: apiSettings.temperature,
-        top_p: apiSettings.top_p,
-        presence_penalty: apiSettings.presence_penalty,
-        frequency_penalty: apiSettings.frequency_penalty,
+        top_p: apiSettings.topP,
+        presence_penalty: apiSettings.presencePenalty,
+        frequency_penalty: apiSettings.frequencyPenalty,
         stream: false,
         chat_completion_source: 'custom',
         custom_url: apiSettings.apiUrl,
@@ -382,7 +382,10 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
         const corePromptMessages = [];
 
         if (apiSettings.mainPrompt) {
-            corePromptMessages.push({ role: 'system', content: replacePlaceholders(apiSettings.mainPrompt) });
+            const content = replacePlaceholders(apiSettings.mainPrompt);
+            if (content.trim()) {
+                corePromptMessages.push({ role: 'system', content });
+            }
         }
 
         // 兼容旧行为：若未使用 $7，则仍以独立 system message 注入前文上下文
@@ -391,39 +394,59 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
         }
 
         if (apiSettings.systemPrompt) {
-            corePromptMessages.push({ role: 'user', content: replacePlaceholders(apiSettings.systemPrompt) });
+            const content = replacePlaceholders(apiSettings.systemPrompt);
+            if (content.trim()) {
+                corePromptMessages.push({ role: 'user', content });
+            }
         }
 
         // 处理 jailbreak 提示词（支持单条开关，默认启用）
         const jailbreakPrompts = (globalSettings?.jailbreakPrompts || []).filter(p => p?.enabled !== false);
+        const promptMode = globalSettings?.promptMode || 'classic';
         const messages = [];
 
-        // 用于标记是否已插入核心提示词
-        let corePromptsInserted = false;
-
-        if (jailbreakPrompts.length > 0) {
-            // 遍历 jailbreak 提示词数组
+        if (promptMode === 'jailbreak') {
             for (const jbPrompt of jailbreakPrompts) {
-                if (jbPrompt.content === '$CORE_PROMPTS') {
-                    // 插入核心提示词
-                    messages.push(...corePromptMessages);
-                    corePromptsInserted = true;
-                } else {
-                    // 插入 jailbreak 提示词
+                if (jbPrompt.content === '$CORE_PROMPTS') continue;
+                const content = replacePlaceholders(jbPrompt.content || '');
+                if (content.trim()) {
                     messages.push({
                         role: jbPrompt.role || 'system',
-                        content: jbPrompt.content || ''
+                        content
                     });
                 }
             }
-
-            // 如果用户没有在 jailbreak 中包含 $CORE_PROMPTS，则追加到末尾
-            if (!corePromptsInserted) {
-                messages.push(...corePromptMessages);
-            }
         } else {
-            // 如果没有配置 jailbreak 提示词，直接使用核心提示词
+            let corePromptsInserted = false;
+
+            if (jailbreakPrompts.length > 0) {
+                for (const jbPrompt of jailbreakPrompts) {
+                    if (jbPrompt.content === '$CORE_PROMPTS') {
+                        messages.push(...corePromptMessages);
+                        corePromptsInserted = true;
+                    } else {
+                        const content = replacePlaceholders(jbPrompt.content || '');
+                        if (content.trim()) {
+                            messages.push({
+                                role: jbPrompt.role || 'system',
+                                content
+                            });
+                        }
+                    }
+                }
+
+                if (!corePromptsInserted) {
+                    messages.push(...corePromptMessages);
+                }
+            } else {
             messages.push(...corePromptMessages);
+            }
+        }
+
+        if (messages.length === 0) {
+            console.error(`[${extensionName}] 消息数组为空，无法发送API请求`);
+            toastr.error('提示词配置为空或全部被过滤，请检查提示词设置。', '配置错误');
+            return null;
         }
 
         let result;
@@ -511,7 +534,7 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                 const requestPromise = context.ConnectionManagerRequestService.sendRequest(
                     profileId,
                     messages,
-                    apiSettings.max_tokens,
+                    apiSettings.maxTokens,
                 );
                 
                 // 添加60秒超时
@@ -558,11 +581,11 @@ export async function callInterceptionApi(userMessage, contextMessages, apiSetti
                 body = JSON.stringify({
                     messages,
                     model,
-                    max_tokens: apiSettings.max_tokens,
+                    max_tokens: apiSettings.maxTokens,
                     temperature: apiSettings.temperature,
-                    top_p: apiSettings.top_p,
-                    presence_penalty: apiSettings.presence_penalty,
-                    frequency_penalty: apiSettings.frequency_penalty,
+                    top_p: apiSettings.topP,
+                    presence_penalty: apiSettings.presencePenalty,
+                    frequency_penalty: apiSettings.frequencyPenalty,
                     stream: useStreaming,
                 });
             }
@@ -816,9 +839,9 @@ export async function testApiConnection(apiSettings) {
                     model: model,
                     max_tokens: 5,
                     temperature: apiSettings.temperature,
-                    top_p: apiSettings.top_p,
-                    presence_penalty: apiSettings.presence_penalty,
-                    frequency_penalty: apiSettings.frequency_penalty,
+                    top_p: apiSettings.topP,
+                    presence_penalty: apiSettings.presencePenalty,
+                    frequency_penalty: apiSettings.frequencyPenalty,
                     stream: false,
                     chat_completion_source: 'custom',
                     custom_url: apiUrl,
@@ -859,9 +882,9 @@ export async function testApiConnection(apiSettings) {
                     model: model,
                     max_tokens: 5,
                     temperature: apiSettings.temperature,
-                    top_p: apiSettings.top_p,
-                    presence_penalty: apiSettings.presence_penalty,
-                    frequency_penalty: apiSettings.frequency_penalty,
+                    top_p: apiSettings.topP,
+                    presence_penalty: apiSettings.presencePenalty,
+                    frequency_penalty: apiSettings.frequencyPenalty,
                     stream: useStreaming,
                 });
             }
